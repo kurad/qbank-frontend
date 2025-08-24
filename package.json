@@ -7,6 +7,17 @@
     "build": "vue-cli-service build"
   },
   "dependencies": {
+    "@ckeditor/ckeditor5-build-classic": "^41.4.2",
+    "@ckeditor/ckeditor5-vue": "^7.3.0",
+    "@mayasabha/ckeditor4-vue3": "^1.0.9",
+    "@wiris/mathtype-ckeditor4": "^8.13.3",
+    "axios": "^1.11.0",
+    "bootstrap": "^5.3.7",
+    "chart.js": "^4.5.0",
+    "html2pdf.js": "^0.10.3",
+    "katex": "^0.16.22",
+    "mathlive": "^0.106.0",
+    "mathml-to-latex": "^1.5.0",
     "register-service-worker": "^1.7.2",
     "vue": "^3.2.13",
     "vue-router": "^4.0.3",
