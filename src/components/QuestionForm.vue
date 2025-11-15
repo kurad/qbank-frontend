@@ -9,6 +9,7 @@
                 <option value="mcq">Multiple Choice</option>
                 <option value="true_false">True/False</option>
                 <option value="short_answer">Short Answer</option>
+                <option value="matching">Matching</option>
               </select>
             </div>
             <div class="col-md-4">

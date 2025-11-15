@@ -46,6 +46,12 @@
               <li>
                 <router-link :to="{ name: 'TopicManagement' }" class="nav-link fw-normal px-2 py-1">Topics</router-link>
               </li>
+              <li>
+                <router-link :to="{ name: 'SchoolsManagement' }" class="nav-link fw-normal px-2 py-1">Schools</router-link>
+              </li>
+              <li>
+                <router-link :to="{ name: 'UserManagement' }" class="nav-link fw-normal px-2 py-1">Users</router-link>
+              </li>
             </ul>
           </li>
         </ul>

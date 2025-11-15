@@ -34,13 +34,13 @@
       <aside class="bg-white border-end shadow-sm d-flex flex-column" style="width: 220px; min-height:100%;">
         <ul class="nav flex-column py-4 px-3 gap-2">
           <li class="nav-item">
-            <router-link to="/student-dashboard" :active-class="active" class="nav-link fw-semibold rounded-pill px-3 py-2">Dashboard</router-link>
+            <router-link :to="{name: 'studentDashboard'}" :active-class="active" class="nav-link fw-semibold rounded-pill px-3 py-2">Dashboard</router-link>
           </li>
            <li class="nav-item">
-            <router-link to="/start-practice" :active-class="active" class="nav-link fw-semibold rounded-pill px-3 py-2">Practice</router-link>
+            <router-link :to="{name: 'start-practice'}" :active-class="active" class="nav-link fw-semibold rounded-pill px-3 py-2">Practice</router-link>
           </li>
           <li class="nav-item">
-            <router-link to="/student/practice-list" :active-class="active" class="nav-link fw-semibold rounded-pill px-3 py-2">My Assessments</router-link>
+            <router-link :to="{name: 'StudentPracticeList'}" :active-class="active" class="nav-link fw-semibold rounded-pill px-3 py-2">My Assessments</router-link>
           </li>
           <li class="nav-item">
             <a href="#" class="nav-link fw-semibold rounded-pill px-3 py-2">Settings</a>

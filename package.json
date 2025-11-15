@@ -1,6 +1,6 @@
 {
-  "name": "question-bank-frontend",
-  "version": "0.1.0",
+  "name": "question-bank-frontend-v2",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "serve": "vue-cli-service serve",
@@ -12,7 +12,7 @@
     "@mayasabha/ckeditor4-vue3": "^1.0.9",
     "@wiris/mathtype-ckeditor4": "^8.13.3",
     "axios": "^1.11.0",
-    "bootstrap": "^5.3.7",
+    "bootstrap": "^5.3.8",
     "chart.js": "^4.5.0",
     "html2pdf.js": "^0.10.3",
     "katex": "^0.16.22",
@@ -21,6 +21,7 @@
     "register-service-worker": "^1.7.2",
     "vue": "^3.2.13",
     "vue-router": "^4.0.3",
+    "vuedraggable": "^4.1.0",
     "vuex": "^4.0.0"
   },
   "devDependencies": {

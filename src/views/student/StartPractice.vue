@@ -132,7 +132,7 @@ export default {
     async fetchTopics() {
       if (!this.selectedGrade || !this.selectedSubject) return;
       try {
-        const res = await axios.get(`/subjects/${this.selectedSubject}/grades/${this.selectedGrade}/topics`);
+        const res = await axios.get(`/subjects/${this.selectedSubject}/grades/${this.selectedGrade}/units`);
         this.topics = res.data || [];
         this.topicId = ''; // Reset topic selection when subject changes
         this.questionCount = null; // Reset question count when subject changes

@@ -26,15 +26,19 @@
             <router-link :to="{name: 'teacherDashboard'}" :active-class="active" class="nav-link fw-semibold rounded-pill px-3 py-2">Dashboard</router-link>
           </li>
           <li class="nav-item">
-            <router-link to="/questions" class="nav-link fw-semibold rounded-pill px-3 py-2">Questions</router-link>
+            <router-link :to="{name: 'questions'}" class="nav-link fw-semibold rounded-pill px-3 py-2">Questions</router-link>
           </li>
           
+          
           <li class="nav-item">
-            <router-link to="/assessment-list" class="nav-link fw-semibold rounded-pill px-3 py-2">Assessments</router-link>
+            <router-link :to="{name: 'create-assessment'}" class="nav-link fw-semibold rounded-pill px-3 py-2">Assessments</router-link>
           </li>
           <!-- <li class="nav-item">
             <a href="#" class="nav-link fw-semibold rounded-pill px-3 py-2">Settings</a>
           </li> -->
+          <li class="nav-item">
+            <router-link :to="{name: 'groups'}" class="nav-link fw-semibold rounded-pill px-3 py-2">Groups</router-link>
+          </li>
         </ul>
       </aside>
       <main class="flex-grow-1 p-4">
@@ -103,7 +107,7 @@ export default {
         alert('You have been successfully logged out');
         
         // Redirect to login page
-        this.$router.push('/login');
+        this.$router.push('/');
       } catch (error) {
         console.error('Logout error:', error);
         alert('An error occurred during logout');
