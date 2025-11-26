@@ -89,7 +89,7 @@ aside {
 
 <script>
 import axios from 'axios';
-
+import Swal from 'sweetalert2';
 
 export default {
   name: 'TeacherLayout',
@@ -104,13 +104,22 @@ export default {
         delete axios.defaults.headers.common['Authorization'];
         
         // Show success message
-        alert('You have been successfully logged out');
-        
-        // Redirect to login page
+        await Swal.fire({
+          icon: 'success',
+          title: 'Logged out',
+          text: 'You have been successfully logged out.',
+          confirmButtonText: 'OK',
+        });
+
+        // Redirect to login page after confirmation
         this.$router.push('/');
       } catch (error) {
         console.error('Logout error:', error);
-        alert('An error occurred during logout');
+        Swal.fire({
+          icon: 'error',
+          title: 'Logout failed',
+          text: 'An error occurred during logout. Please try again.',
+        });
       }
     }
   }

@@ -1,177 +1,308 @@
 <template>
-  <!-- Backdrop -->
-  <div v-if="showAddModal" class="custom-backdrop" aria-hidden="true"></div>
-
-  <!-- Modal -->
-  <div v-if="showAddModal" class="modal d-block" tabindex="-1" role="dialog" aria-modal="true">
-    <div class="modal-dialog modal-fullscreen" role="document">
+  <div v-if="showAddModal" class="modal fade show d-block" tabindex="-1">
+    <div class="modal-dialog modal-xl">
       <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Add Questions</h5>
-          <button type="button" class="btn-close" aria-label="Close" @click="closeAddModal"></button>
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title">Add Questions to Assessment</h5>
+          <button type="button" class="btn-close" @click="close"></button>
         </div>
 
         <div class="modal-body">
-          <!-- Subject Filter -->
-          <div class="mb-3">
-            <label class="form-label">Subject Filter</label>
-            <div class="position-relative">
-              <input
-                v-model="subjectSearch"
-                @input="searchSubjects"
-                @focus="showSubjectDropdown = true"
-                type="text"
-                class="form-control"
-                placeholder="Type subject name (e.g., Computer Science)"
-              />
-              <div v-if="showSubjectDropdown && filteredSubjects.length" class="dropdown-menu d-block w-100 position-absolute">
-                <button 
-                  v-for="subject in filteredSubjects" 
-                  :key="subject.id" 
-                  class="dropdown-item" 
-                  @click="selectSubject(subject)"
+          <!-- Step 1: filters -->
+          <div v-if="step === 1">
+            <div class="row">
+              <div class="col-md-4 mb-3">
+                <label class="form-label">Grade Level</label>
+                <select
+                  v-model="form.grade_level_id"
+                  class="form-select"
+                  @change="onGradeChange"
                 >
-                  {{ subject.name }} - {{ subject.grade_level }}
-                </button>
+                  <option value="">Choose</option>
+                  <option v-for="g in gradeLevels" :key="g.id" :value="g.id">
+                    {{ g.grade_name }}
+                  </option>
+                </select>
               </div>
-            </div>
-            <div v-if="selectedSubject" class="mt-2 d-flex align-items-center">
-              <span class="badge bg-primary me-2">{{ selectedSubject.name }} - {{ selectedSubject.grade_level }}</span>
-              <button class="btn btn-sm btn-outline-danger" @click="clearSubject">×</button>
-            </div>
-          </div>
 
-          <!-- Question Search -->
-          <div class="mb-3 d-flex align-items-center gap-2">
-            <input
-              v-model="availableSearch"
-              @keyup.enter="fetchAvailableQuestions()"
-              type="text"
-              class="form-control"
-              placeholder="Search questions (enter to search)"
-            />
-            <button class="btn btn-outline-secondary" type="button" @click="fetchAvailableQuestions()" :disabled="availableLoading">
-              <span v-if="availableLoading" class="spinner-border spinner-border-sm me-1"></span>
-              Search
-            </button>
-          </div>
-
-          <div v-if="availableError" class="alert alert-danger py-2">{{ availableError }}</div>
-
-          <!-- Questions container -->
-          <div class="border rounded" style="max-height: 75vh; overflow:auto;">
-            <div v-if="availableLoading" class="p-3 text-muted">Loading questions...</div>
-
-            <template v-else>
-              <div v-for="grp in groupedAvailable" :key="grp.name" class="border-bottom">
-                <button
-                  class="w-100 text-start btn btn-light d-flex justify-content-between align-items-center px-3 py-2"
-                  @click="toggleGroup(grp.name)"
+              <div class="col-md-4 mb-3">
+                <label class="form-label">Subject</label>
+                <select
+                  v-model="form.subject_id"
+                  class="form-select"
+                  @change="loadTopics"
                 >
-                  <span class="fw-semibold">{{ grp.name || 'Ungrouped' }}</span>
-                  <span class="text-muted small">
-                    {{ grp.items.length }} questions
-                    <i class="bi" :class="isExpanded(grp.name) ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
-                  </span>
-                </button>
+                  <option value="">Choose</option>
+                  <option v-for="s in subjects" :key="s.id" :value="s.id">
+                    {{ s.name }}
+                  </option>
+                </select>
+              </div>
 
-                <!-- Smooth collapse -->
-                <transition name="collapse">
-                  <div v-if="isExpanded(grp.name)" class="px-3 pb-3">
-                    <div
-                      v-for="q in grp.items"
-                      :key="q.id"
-                      class="p-2 border rounded mb-2 d-flex align-items-start justify-content-between"
+              <div class="col-md-4 mb-3">
+                <label class="form-label">Topics</label>
+                <div class="topic-picker border rounded p-2 bg-white">
+                  <div class="d-flex align-items-center flex-wrap">
+                    <span
+                      v-for="id in form.topic_ids"
+                      :key="id"
+                      class="badge bg-primary text-truncate topic-chip me-2 mb-2"
                     >
-                      <div class="me-3" style="max-width: 70%;">
-                        <div class="fw-semibold mb-1">
-                          Q#{{ q.id }} — <span class="text-muted">{{ q.question_type }}</span>
-                        </div>
+                      {{ getTopicName(id) }}
+                      <button
+                        type="button"
+                        class="btn-close btn-close-white btn-sm ms-2"
+                        @click="toggleTopic(id)"
+                        aria-label="Remove"
+                      ></button>
+                    </span>
 
-                        <!-- Render math text -->
-                        <div class="mb-2 question-text" v-html="renderMath(q.is_math ? ('$' + q.question_text + '$') : q.question_text)"></div>
-
-                        <!-- True/False -->
-                        <div v-if="q.question_type === 'true_false'" class="mb-2">
-                          <ul class="mb-0 ps-3">
-                            <li>
-                              <span :class="{ 'text-success fw-semibold': q.correct_answer === 'true' }">True</span>
-                            </li>
-                            <li>
-                              <span :class="{ 'text-success fw-semibold': q.correct_answer === 'false' }">False</span>
-                            </li>
-                          </ul>
-                        </div>
-
-                        <!-- Multiple choice -->
-                        <div v-else-if="(q.options || []).length" class="mb-2">
-                          <ul class="mb-0 ps-3">
-                            <li v-for="(opt, oi) in q.options" :key="oi">
-                              <span class="me-1 text-muted">{{ String.fromCharCode(65 + oi) }}.</span>
-                              <span v-html="renderMath(opt.option_text)"></span>
-                              <span v-if="opt.is_correct" class="text-success fw-semibold ms-1">(Correct)</span>
-                            </li>
-                          </ul>
-                        </div>
-
-                        <!-- Tags -->
-                        <div class="mt-1">
-                          <span class="badge me-2" :class="getDifficultyBadgeClass(q.difficulty_level)">
-                            {{ q.difficulty_level }}
-                          </span>
-                          <span class="badge bg-success">{{ q.marks }} marks</span>
-                        </div>
-                      </div>
-
-                      <!-- Selection -->
-                      <div class="text-nowrap">
-                        <input
-                          class="form-check-input"
-                          type="checkbox"
-                          :id="'pick-' + q.id"
-                          :disabled="existingQuestionIds.has(q.id)"
-                          :checked="selectedToAdd.has(q.id)"
-                          @change="toggleSelect(q.id)"
-                        />
-                        <label class="form-check-label ms-2" :for="'pick-' + q.id">
-                          {{ existingQuestionIds.has(q.id) ? 'Already Added' : (selectedToAdd.has(q.id) ? 'Selected' : 'Select') }}
-                        </label>
-                      </div>
-                    </div>
+                    <input
+                      v-model="topicQuery"
+                      @input="filterTopicOptions"
+                      @keydown.enter.prevent="addTopicFromQuery"
+                      class="form-control form-control-sm border-0 p-0 flex-grow-1"
+                      placeholder="Search and press Enter to add"
+                      style="min-width: 120px"
+                    />
                   </div>
-                </transition>
+
+                  <div v-if="loadingTopics" class="mt-2 text-muted small">
+                    Loading topics...
+                  </div>
+                  <div
+                    v-else-if="filteredTopicOptions.length"
+                    class="topic-options mt-2"
+                  >
+                    <button
+                      v-for="opt in filteredTopicOptions"
+                      :key="opt.id"
+                      class="btn btn-sm btn-light me-2 mb-2"
+                      @click="selectTopic(opt)"
+                    >
+                      {{ opt.topic_name }}
+                    </button>
+                  </div>
+                  <div v-else class="text-muted small mt-2">
+                    Type to search topics
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="d-flex justify-content-end">
+              <button
+                class="btn btn-primary"
+                @click="loadQuestions"
+                :disabled="!form.topic_ids.length || loadingQuestions"
+              >
+                {{ loadingQuestions ? 'Loading...' : 'Load Questions' }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Step 2: pick questions -->
+          <div v-if="step === 2">
+            <div class="row">
+              <div class="col-md-7">
+                <h6>Available Questions</h6>
+                <div v-if="questions.length === 0" class="text-muted">
+                  No questions for selected topics
+                </div>
+
+                <div
+                  v-for="q in questions"
+                  :key="q.id"
+                  class="border rounded p-3 shadow-sm mb-2"
+                >
+                  <div class="form-check mb-2">
+                    <input
+                      class="form-check-input me-2"
+                      type="checkbox"
+                      :id="'addq' + q.id"
+                      :value="q.id"
+                      v-model="selectedIds"
+                      :disabled="existingQuestionIds?.has && existingQuestionIds.has(q.id)"
+                    />
+                    <label
+                      class="form-check-label fw-bold d-block mb-1"
+                      :for="'addq' + q.id"
+                      v-html="q.question"
+                    ></label>
+                  </div>
+
+                    <!-- MCQ options -->
+  <div
+    v-if="q.question_type === 'mcq'"
+    class="mb-2 d-flex flex-wrap align-items-start gap-3 ps-1"
+  >
+    <div
+      v-for="(opt, oi) in parseOptions(q.options)"
+      :key="oi"
+      class="d-inline-flex flex-column"
+      :class="{
+        'text-success fw-semibold': isCorrectOption(
+          q.correct_answer,
+          getOptionValue(opt)
+        ),
+      }"
+    >
+      <div class="d-flex align-items-center">
+        <span class="me-1 text-muted">
+          {{ String.fromCharCode(65 + oi) }}.
+        </span>
+        <span>{{ getOptionValue(opt) }}</span>
+        <i
+          v-if="isCorrectOption(q.correct_answer, getOptionValue(opt))"
+          class="bi bi-check-circle ms-1"
+        ></i>
+      </div>
+      <img
+        v-if="getOptionImageUrl(opt)"
+        :src="getOptionImageUrl(opt)"
+        alt="Option Image"
+        class="img-thumbnail mt-1"
+        style="max-width: 180px; max-height: 120px; object-fit: contain;"
+      />
+    </div>
+  </div>
+
+  <!-- True/False -->
+  <div
+    v-else-if="q.question_type === 'true_false'"
+    class="mb-2 d-flex align-items-center gap-4 ps-1"
+  >
+    <div
+      class="d-inline-flex align-items-center"
+      :class="{ 'text-success fw-semibold': isCorrectOption(q.correct_answer, 'true') }"
+    >
+      <span class="me-1">True</span>
+      <i
+        v-if="isCorrectOption(q.correct_answer, 'true')"
+        class="bi bi-check-circle ms-1"
+      ></i>
+    </div>
+    <div
+      class="d-inline-flex align-items-center"
+      :class="{ 'text-success fw-semibold': isCorrectOption(q.correct_answer, 'false') }"
+    >
+      <span class="me-1">False</span>
+      <i
+        v-if="isCorrectOption(q.correct_answer, 'false')"
+        class="bi bi-check-circle ms-1"
+      ></i>
+    </div>
+  </div>
+
+  <!-- Matching -->
+  <div v-else-if="q.question_type === 'matching'" class="mb-2">
+    <div class="row g-3">
+      <div class="col-12 col-md-6">
+        <strong>Left</strong>
+        <ul class="list-group list-group-flush">
+          <li
+            v-for="(txt, i) in getMatchingItems(q).left"
+            :key="'add-left-'+i"
+            class="list-group-item py-1"
+          >
+            {{ txt }}
+          </li>
+        </ul>
+      </div>
+      <div class="col-12 col-md-6">
+        <strong>Right</strong>
+        <ul class="list-group list-group-flush">
+          <li
+            v-for="(txt, i) in getMatchingItems(q).right"
+            :key="'add-right-'+i"
+            class="list-group-item py-1"
+          >
+            {{ txt }}
+          </li>
+        </ul>
+      </div>
+    </div>
+    <div class="mt-2">
+      <strong>✅ Correct Pairs:</strong>
+      <ul class="list-unstyled mb-0">
+        <li
+          v-for="(pair, i) in getMatchingItems(q).pairs"
+          :key="'add-pair-'+i"
+        >
+          {{ getMatchingItems(q).left[pair.left_index] || `Left ${pair.left_index + 1}` }}
+          →
+          {{ getMatchingItems(q).right[pair.right_index] || `Right ${pair.right_index + 1}` }}
+        </li>
+      </ul>
+    </div>
+  </div>
+
+                  <small class="text-muted">
+                    Topic: {{ q.topic?.topic_name }} | Difficulty:
+                    {{ q.difficulty_level }} | Points: {{ q.marks }}
+                  </small>
+                </div>
               </div>
 
-              <div v-if="!groupedAvailable.length" class="p-3 text-muted">No questions found.</div>
-            </template>
+              <div class="col-md-5">
+                <h6>Selected ({{ selectedIds.length }})</h6>
+                <ul class="list-group mb-3">
+                  <li
+                    v-for="id in selectedIds"
+                    :key="id"
+                    class="list-group-item"
+                  >
+                    {{ getQuestionText(id) }}
+                  </li>
+                </ul>
+
+                <button
+                  class="btn btn-success w-100"
+                  :disabled="addIsLoading || !selectedIds.length"
+                  @click="confirmAdd"
+                >
+                  {{ addIsLoading ? 'Adding...' : 'Add Selected Questions' }}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- Footer -->
-        <div class="modal-footer w-100 d-flex justify-content-between align-items-center">
-          <div class="d-flex align-items-center gap-2">
-            <button type="button" class="btn btn-outline-secondary" @click="goPrevPage" :disabled="availableLoading || availablePage <= 1">Prev</button>
-            <span class="text-muted">Page {{ availablePage }} of {{ availableLastPage }}</span>
-            <button type="button" class="btn btn-outline-secondary" @click="goNextPage" :disabled="availableLoading || availablePage >= availableLastPage">Next</button>
-          </div>
-
-          <div>
-            <button type="button" class="btn btn-outline-secondary me-2" @click="closeAddModal" :disabled="addIsLoading || availableLoading">Cancel</button>
-            <button type="button" class="btn btn-primary" @click="addSelectedQuestions" :disabled="addIsLoading || selectedToAdd.size === 0">
-              <span v-if="addIsLoading" class="spinner-border spinner-border-sm me-1"></span>
-              Add Selected ({{ selectedToAdd.size }})
-            </button>
-          </div>
+        <div class="modal-footer">
+          <button
+            v-if="step === 2"
+            class="btn btn-secondary"
+            @click="step = 1"
+          >
+            Back
+          </button>
+          <button
+            class="btn btn-light"
+            @click="close"
+          >
+            Close
+          </button>
+          <button
+            v-if="step === 2"
+            class="btn btn-outline-secondary"
+            @click="selectedIds = []"
+          >
+            Clear
+          </button>
         </div>
       </div>
     </div>
   </div>
 </template>
-
 <script>
 import axios from '@/axios'
-import katex from 'katex'
-import 'katex/dist/katex.min.css'
+import {
+  parseOptions,
+  getOptionValue,
+  isCorrectOption,
+  getMatchingItems,
+  getOptionImageUrl,
+} from '@/utils/questionDisplay'
 
 export default {
   name: 'AddQuestionsModal',
@@ -182,27 +313,34 @@ export default {
   },
   emits: ['update:modelValue', 'add-questions'],
   data() {
-    return {
-      addIsLoading: false,
-      availableQuestions: [],
-      availableLoading: false,
-      availableError: '',
-      availableSearch: '',
-      selectedToAdd: new Set(),
-      availablePage: 1,
-      availableLastPage: 1,
-      availablePerPage: 10,
-      availableTotal: 0,
-      expandedGroups: new Set(),
-      // Subject filter
-      subjectSearch: '',
-      subjects: [],
-      filteredSubjects: [],
-      selectedSubject: null,
-      showSubjectDropdown: false,
-      subjectsLoading: false,
-    }
-  },
+  return {
+    // v-model bridge state not needed here; we already use computed showAddModal
+
+    // Step control
+    step: 1,
+
+    // Lookups
+    gradeLevels: [],
+    subjects: [],
+    topics: [],
+
+    // Questions loaded for selected topics
+    questions: [],
+    selectedIds: [],
+
+    loadingTopics: false,
+    loadingQuestions: false,
+
+    form: {
+      grade_level_id: "",
+      subject_id: "",
+      topic_ids: [],
+    },
+
+    topicQuery: "",
+    filteredTopicOptions: [],
+  };
+},
   computed: {
     // v-model bridge
     showAddModal: {
@@ -219,161 +357,199 @@ export default {
       return Array.from(groups.entries()).map(([name, items]) => ({ name, items }))
     }
   },
-  methods: {
-    renderMath(text) {
-      if (!text) return ''
-      try {
-        const clean = String(text).replace(/^\$+|\$+$/g, '')
-        return katex.renderToString(clean, { throwOnError: false })
-      } catch (e) {
-        console.error(e)
-        return text
-      }
-    },
-    getDifficultyBadgeClass(level) {
-      switch ((level || '').toString().toLowerCase()) {
-        case 'easy': return 'bg-info'
-        case 'medium': return 'bg-warning'
-        case 'hard': return 'bg-danger'
-        default: return 'bg-secondary'
-      }
-    },
-    toggleGroup(name) {
-      const key = name || 'Ungrouped'
-      if (this.expandedGroups.has(key)) this.expandedGroups.delete(key)
-      else this.expandedGroups.add(key)
-      this.expandedGroups = new Set(this.expandedGroups)
-    },
-    isExpanded(name) {
-      const key = name || 'Ungrouped'
-      return this.expandedGroups.has(key)
-    },
-    closeAddModal() {
-      if (this.addIsLoading) return
-      this.showAddModal = false
-    },
-    async fetchAvailableQuestions() {
-      this.availableLoading = true
-      this.availableError = ''
-      try {
-        const token = localStorage.getItem('auth_token')
-        const headers = token ? { Authorization: `Bearer ${token}` } : {}
-        const params = { params: { page: this.availablePage, per_page: this.availablePerPage } }
-        const s = (this.availableSearch || '').trim()
-        if (s) params.params.search = s
-        const resp = await axios.get('/my-questions', { headers, ...params })
-        const payload = resp.data || {}
-
-        const flatList = []
-        const normalizeItem = (raw, groupName) => {
-          const qData = raw?.question || raw || {}
-          const correct = qData.correct_answer ?? ''
-          let rawOptions = qData.options ?? []
-          if (typeof rawOptions === 'string') {
-            try { rawOptions = JSON.parse(rawOptions) } catch (_) {
-              if (rawOptions.includes(',')) rawOptions = rawOptions.split(',').map(o => o.trim())
-              else rawOptions = []
-            }
-          }
-          if (!Array.isArray(rawOptions)) rawOptions = []
-          const options = rawOptions
-            .filter(opt => opt !== null && opt !== undefined)
-            .map(opt => {
-              if (typeof opt === 'object' && (opt.option_text !== undefined || opt.is_correct !== undefined)) {
-                const text = String(opt.option_text ?? '')
-                const isCorrectRaw = opt.is_correct
-                const isCorrect = typeof isCorrectRaw === 'boolean' ? isCorrectRaw : String(isCorrectRaw).toLowerCase() === 'true' || String(isCorrectRaw) === '1'
-                return { option_text: qData.is_math ? `$${text}$` : text, is_correct: isCorrect }
-              }
-              const text = String(opt)
-              return { option_text: qData.is_math ? `$${text}$` : text, is_correct: text === String(correct) }
-            })
-          const rawType = String(qData.question_type || 'mcq').toLowerCase()
-          return {
-            id: raw.id || qData.id,
-            question_text: qData.question || qData.question_text || '',
-            question_type: rawType.includes('true') ? 'true_false' : rawType,
-            question_image: qData.question_image_url || qData.question_image || null,
-            options,
-            correct_answer: String(correct).toLowerCase(),
-            is_math: !!qData.is_math,
-            marks: qData.marks || 0,
-            difficulty_level: qData.difficulty_level || 'remembering',
-            _group: groupName,
-          }
-        }
-
-        const grouped = payload.data
-        if (grouped && typeof grouped === 'object' && !Array.isArray(grouped)) {
-          for (const [groupName, arr] of Object.entries(grouped)) {
-            const list = Array.isArray(arr) ? arr : []
-            list.forEach(raw => flatList.push(normalizeItem(raw, groupName)))
-          }
-        } else if (Array.isArray(payload.data)) {
-          payload.data.forEach(raw => flatList.push(normalizeItem(raw, undefined)))
-        } else if (Array.isArray(payload?.data?.data)) {
-          payload.data.data.forEach(raw => flatList.push(normalizeItem(raw, undefined)))
-        }
-
-        this.availableQuestions = flatList
-        const pg = payload.pagination || payload.data?.pagination || {}
-        this.availablePage = Number(pg.current_page || this.availablePage || 1)
-        this.availableLastPage = Number(pg.last_page || this.availableLastPage || 1)
-        this.availablePerPage = Number(pg.per_page || this.availablePerPage || 10)
-        this.availableTotal = Number(pg.total || flatList.length)
-      } catch (e) {
-        console.error('Failed to fetch available questions', e)
-        this.availableError = 'Failed to fetch questions'
-      } finally {
-        this.availableLoading = false
-      }
-    },
-    goPrevPage() {
-      if (this.availablePage > 1 && !this.availableLoading) {
-        this.availablePage -= 1
-        this.fetchAvailableQuestions()
-      }
-    },
-    goNextPage() {
-      if (this.availablePage < this.availableLastPage && !this.availableLoading) {
-        this.availablePage += 1
-        this.fetchAvailableQuestions()
-      }
-    },
-    toggleSelect(id) {
-      if (this.existingQuestionIds?.has && this.existingQuestionIds.has(id)) return
-      if (this.selectedToAdd.has(id)) this.selectedToAdd.delete(id)
-      else this.selectedToAdd.add(id)
-      this.selectedToAdd = new Set(this.selectedToAdd)
-    },
-    async addSelectedQuestions() {
-      if (!this.selectedToAdd.size) return
-      this.addIsLoading = true
-      try {
-        const ids = Array.from(this.selectedToAdd)
-        await this.$emit('add-questions', ids)
-        this.showAddModal = false
-      } catch (e) {
-        console.error('Add selected failed', e)
-      } finally {
-        this.addIsLoading = false
-      }
-    },
+methods: {
+  // expose shared helpers for template usage
+  parseOptions,
+  getOptionValue,
+  isCorrectOption,
+  getMatchingItems,
+  getOptionImageUrl,
+  close() {
+    if (this.addIsLoading) return;
+    this.showAddModal = false;
   },
-  watch: {
-    showAddModal(open) {
-      if (open) {
-        this.selectedToAdd = new Set()
-        this.availableSearch = ''
-        this.availablePage = 1
-        this.expandedGroups = new Set()
-        this.fetchAvailableQuestions()
-      }
+
+  async loadInitial() {
+    try {
+      const [gRes, sRes] = await Promise.all([
+        axios.get("/grade-levels"),
+        axios.get("/subjects"),
+      ]);
+      this.gradeLevels = gRes.data || [];
+      this.subjects = sRes.data || [];
+    } catch {
+      this.gradeLevels = [];
+      this.subjects = [];
     }
   },
-  mounted() {
-    if (this.showAddModal) this.fetchAvailableQuestions()
-  }
+
+  onGradeChange() {
+    this.form.topic_ids = [];
+    this.topicQuery = "";
+    this.topics = [];
+    this.filteredTopicOptions = [];
+    if (this.form.subject_id) {
+      this.loadTopics();
+    }
+  },
+
+  async loadTopics() {
+    if (!this.form.grade_level_id || !this.form.subject_id) return;
+    this.loadingTopics = true;
+    try {
+      const res = await axios.get("/topics", {
+        params: {
+          grade_level_id: this.form.grade_level_id,
+          subject_id: this.form.subject_id,
+        },
+      });
+      this.topics = res.data || [];
+      this.filteredTopicOptions = this.topics.filter(
+        (t) => !this.form.topic_ids.includes(t.id)
+      );
+    } catch {
+      this.topics = [];
+      this.filteredTopicOptions = [];
+    } finally {
+      this.loadingTopics = false;
+    }
+  },
+
+  filterTopicOptions() {
+    const q = this.topicQuery.trim().toLowerCase();
+    if (!q) {
+      this.filteredTopicOptions = this.topics.filter(
+        (t) => !this.form.topic_ids.includes(t.id)
+      );
+      return;
+    }
+    this.filteredTopicOptions = this.topics.filter(
+      (t) =>
+        !this.form.topic_ids.includes(t.id) &&
+        t.topic_name.toLowerCase().includes(q)
+    );
+  },
+
+  selectTopic(topic) {
+    if (!this.form.topic_ids.includes(topic.id))
+      this.form.topic_ids.push(topic.id);
+    this.topicQuery = "";
+    this.filterTopicOptions();
+  },
+
+  toggleTopic(id) {
+    this.form.topic_ids = this.form.topic_ids.includes(id)
+      ? this.form.topic_ids.filter((x) => x !== id)
+      : [...this.form.topic_ids, id];
+    this.filterTopicOptions();
+  },
+
+  addTopicFromQuery() {
+    const match = this.filteredTopicOptions[0];
+    if (match) this.selectTopic(match);
+  },
+
+  getTopicName(id) {
+    const t = this.topics.find((x) => x.id === id);
+    return t ? t.topic_name : "Unknown";
+  },
+
+  async loadQuestions() {
+    if (!this.form.topic_ids.length) {
+      alert("Select topics first.");
+      return;
+    }
+    if (this.loadingQuestions) return;
+
+    this.loadingQuestions = true;
+    try {
+      // Primary: /questions/topics with topic_ids[]
+      const res = await axios.get("/questions/topics", {
+        params: {
+          "topic_ids[]": this.form.topic_ids,
+        },
+      });
+      const payload = res.data;
+      this.questions = Array.isArray(payload)
+        ? payload
+        : payload.data || [];
+    } catch (err) {
+      // 404 fallback: fetch per-topic questions and merge
+      if (err.response && err.response.status === 404) {
+        try {
+          const calls = this.form.topic_ids.map((id) =>
+            axios.get(`/topics/${id}/questions/no-pagination`)
+          );
+          const results = await Promise.all(calls);
+          const all = [];
+          results.forEach((r) => {
+            const arr = Array.isArray(r.data) ? r.data : r.data.data || [];
+            arr.forEach((q) => all.push(q));
+          });
+          const map = {};
+          all.forEach((q) => {
+            if (q && q.id) map[q.id] = q;
+          });
+          this.questions = Object.values(map);
+        } catch (innerErr) {
+          console.error("Fallback per-topic fetch failed:", innerErr);
+          alert("Failed to load questions (fallback).");
+          this.loadingQuestions = false;
+          return;
+        }
+      } else {
+        console.error("Failed to load questions for topics:", err);
+        alert(err.response?.data?.message || "Failed to load questions.");
+        this.loadingQuestions = false;
+        return;
+      }
+    }
+
+    // filter out already-existing IDs
+    const existing = this.existingQuestionIds;
+    this.questions = this.questions.filter(
+      (q) => !(existing?.has && existing.has(q.id))
+    );
+    this.selectedIds = [];
+    this.step = 2;
+    this.loadingQuestions = false;
+  },
+
+  getQuestionText(id) {
+    const q = this.questions.find((x) => x.id === id);
+    if (!q || !q.question) return "";
+    const plain = String(q.question).replace(/<[^>]*>/g, "");
+    return plain.length > 80 ? plain.slice(0, 80) + "..." : plain;
+  },
+
+  async confirmAdd() {
+    if (!this.selectedIds.length) return;
+    this.addIsLoading = true;
+    try {
+      await this.$emit("add-questions", this.selectedIds);
+      this.showAddModal = false;
+    } finally {
+      this.addIsLoading = false;
+    }
+  },
+},
+watch: {
+  showAddModal(open) {
+    if (open) {
+      this.step = 1;
+      this.form = {
+        grade_level_id: "",
+        subject_id: "",
+        topic_ids: [],
+      };
+      this.topicQuery = "";
+      this.filteredTopicOptions = [];
+      this.questions = [];
+      this.selectedIds = [];
+      this.loadInitial();
+    }
+  },
+},
 }
 </script>
 
@@ -416,5 +592,76 @@ export default {
 
 .katex {
   font-size: 1em;
+}
+/* Modal layout */
+.modal-dialog.modal-xl {
+  max-width: 1100px;
+}
+
+.modal-content {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.25);
+}
+
+.modal-header {
+  background: linear-gradient(90deg, #2563eb, #4f46e5);
+  color: #fff;
+  border-bottom: none;
+}
+
+.modal-title {
+  font-weight: 700;
+}
+
+/* Body spacing */
+.modal-body {
+  padding: 1.5rem 1.75rem;
+}
+
+/* Topic picker */
+.topic-picker {
+  min-height: 56px;
+  background: #f9fafb;
+}
+
+.topic-chip {
+  padding: 0.35rem 0.6rem;
+  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Scrollable options under topics */
+.topic-options {
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.topic-options::-webkit-scrollbar {
+  height: 6px;
+}
+
+.topic-options::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 6px;
+}
+
+/* Question cards */
+.form-check {
+  background: #fff;
+}
+
+.form-check .form-check-input {
+  transform: scale(1.05);
+}
+
+.border.rounded.p-3.shadow-sm {
+  border-radius: 0.75rem;
+}
+
+/* Selected list */
+.list-group-item {
+  font-size: 0.9rem;
 }
 </style>

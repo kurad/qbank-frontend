@@ -167,10 +167,17 @@
                         v-model="selected"
                       />
                       <label
-                        class="form-check-label fw-bold"
+                        class="form-check-label fw-bold d-block mb-1"
                         :for="'q' + q.id"
                         v-html="q.question"
                       ></label>
+                      <img
+                        v-if="q.question_image"
+                        :src="getQuestionImageUrl(q)"
+                        alt="Question Image"
+                        class="img-thumbnail mt-1"
+                        style="max-width: 220px; max-height: 150px; object-fit: contain;"
+                      />
                     </div>
                     <!-- MCQ Options -->
                     <ul
@@ -183,15 +190,24 @@
                         class="list-group-item d-flex justify-content-between align-items-center"
                         :class="{
                           'list-group-item-success':
-                            option === q.correct_answer,
+                            isCorrectOption(q.correct_answer, getOptionValue(option)),
                         }"
                       >
-                      <div>
-                        <strong>{{ String.fromCharCode(65 + idx) }}.</strong>
-                        <span class="ms-2">{{ option }}</span>
+                      <div class="d-flex flex-column">
+                        <div>
+                          <strong>{{ String.fromCharCode(65 + idx) }}.</strong>
+                          <span class="ms-2">{{ getOptionValue(option) }}</span>
+                        </div>
+                        <img
+                          v-if="getOptionImageUrl(option)"
+                          :src="getOptionImageUrl(option)"
+                          alt="Option Image"
+                          class="img-thumbnail mt-1"
+                          style="max-width: 180px; max-height: 120px; object-fit: contain;"
+                        />
                       </div>
                         <i
-                          v-if="option === q.correct_answer"
+                          v-if="isCorrectOption(q.correct_answer, getOptionValue(option))"
                           class="bi bi-check-circle text-success"
                         ></i>
                       </li>
@@ -311,7 +327,9 @@ export default {
   },
   beforeUnmount() {
     if (this.bsModal) {
-      try { this.bsModal.hide(); } catch (e) {}
+      try {
+        if (this.bsModal._element) this.bsModal.hide();
+      } catch (e) {}
       if (typeof this.bsModal.dispose === 'function') {
         try { this.bsModal.dispose(); } catch (e) {}
       }
@@ -320,7 +338,9 @@ export default {
   },
   beforeDestroy() {
     if (this.bsModal) {
-      try { this.bsModal.hide(); } catch (e) {}
+      try {
+        if (this.bsModal._element) this.bsModal.hide();
+      } catch (e) {}
       if (typeof this.bsModal.dispose === 'function') {
         try { this.bsModal.dispose(); } catch (e) {}
       }
@@ -606,6 +626,48 @@ export default {
       } catch (e) {
         return [];
       }
+    },
+    getOptionValue(opt) {
+      if (opt && typeof opt === 'object') {
+        if (typeof opt.text === 'string') return opt.text;
+        if (typeof opt.value === 'string') return opt.value;
+      }
+      return opt;
+    },
+    isCorrectOption(correct, candidate) {
+      try {
+        const c = typeof correct === 'string' ? correct.trim() : correct;
+        const v = typeof candidate === 'string' ? candidate.trim() : candidate;
+        if (typeof c === 'string' && typeof v === 'string') {
+          return c.toLowerCase() === v.toLowerCase();
+        }
+        if (typeof c === 'boolean') {
+          const vv = String(v).toLowerCase();
+          return (c && vv === 'true') || (!c && vv === 'false');
+        }
+        return c === v;
+      } catch (_) {
+        return false;
+      }
+    },
+    getOptionImageUrl(opt) {
+      if (!opt || typeof opt !== 'object' || !opt.image) return '';
+      if (opt.image.startsWith('http://') || opt.image.startsWith('https://')) return opt.image;
+      try {
+        const base = (axios.defaults.baseURL || '').replace(/\/?api\/?$/i, '');
+        if (base) return `${base}/storage/${opt.image}`;
+      } catch {}
+      return `/storage/${opt.image}`;
+    },
+    getQuestionImageUrl(q) {
+      const path = q.question_image_url || q.question_image;
+      if (!path) return '';
+      if (String(path).startsWith('http://') || String(path).startsWith('https://')) return path;
+      try {
+        const base = (axios.defaults.baseURL || '').replace(/\/?api\/?$/i, '');
+        if (base) return `${base}/storage/${path}`;
+      } catch {}
+      return `/storage/${path}`;
     },
     async confirmSave() {
       if (!this.form.title) {

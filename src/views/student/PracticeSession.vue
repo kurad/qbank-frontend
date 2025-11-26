@@ -38,7 +38,7 @@
           <!-- Question Text -->
           <div
             class="question-text mb-3 p-3 rounded shadow-sm"
-            v-html="renderMath(questions[currentIndex].question_text)"
+            v-html="renderMath(questions[currentIndex].question_text, questions[currentIndex].is_math)"
           ></div>
 
           <!-- Options / Answers -->
@@ -64,7 +64,7 @@
                 :for="'opt-' + currentIndex + '-' + i"
               >
                 <span class="option-letter">{{ String.fromCharCode(65 + i) }}</span>
-                <span class="option-content" v-html="renderMath(option.text)"></span>
+                <span class="option-content" v-html="renderMath(option.text, questions[currentIndex].is_math)"></span>
               </label>
             </div>
 
@@ -224,6 +224,7 @@ export default {
       this.questions = questions.map((q) => {
         const qObj = q.question || {};
         const qId = qObj.id || q.question_id || q.id || null;
+        const isMath = !!qObj.is_math;
         let options = qObj.options;
         if (typeof options === "string") {
           try {
@@ -239,6 +240,7 @@ export default {
             question_id: q.question_id || qId,
             question_text: qObj.question,
             question_type: "matching",
+            is_math: isMath,
             options,
           };
         }
@@ -249,6 +251,7 @@ export default {
             question_id: q.question_id || qId,
             question_text: qObj.question,
             question_type: "short_answer",
+            is_math: isMath,
             options: [],
           };
         }
@@ -259,6 +262,7 @@ export default {
             question_id: q.question_id || qId,
             question_text: qObj.question,
             question_type: "true_false",
+            is_math: isMath,
             options: [{ text: "True" }, { text: "False" }],
           };
         }
@@ -268,6 +272,7 @@ export default {
           question_id: q.question_id || qId,
           question_text: qObj.question,
           question_type: "multiple_choice",
+          is_math: isMath,
           options: Array.isArray(options)
             ? options.map((opt) => ({ text: opt }))
             : [],
@@ -292,23 +297,47 @@ export default {
     nextQuestion() {
       if (this.currentIndex < this.questions.length - 1) this.currentIndex++;
     },
-    renderMath(text) {
+    renderMath(text, isMath = false) {
       if (!text) return "";
-      // Display math
-      text = text.replace(/\$\$([^$]+)\$\$/g, (_, math) => {
-        return `<div class="katex-display">${katex.renderToString(math, {
-          displayMode: true,
-          throwOnError: false,
-        })}</div>`;
-      });
-      // Inline math
-      text = text.replace(/\$(.+?)\$/g, (_, math) => {
-        return `<span class="katex-inline">${katex.renderToString(math, {
-          displayMode: false,
-          throwOnError: false,
-        })}</span>`;
-      });
-      return text;
+      let processed = String(text);
+
+      // First, handle explicit LaTeX delimiters if present
+      const hasBlock = /\$\$([^$]+)\$\$/g.test(processed);
+      const hasInline = /\$(.+?)\$/g.test(processed);
+
+      if (hasBlock || hasInline) {
+        processed = processed.replace(/\$\$([^$]+)\$\$/g, (_, math) => {
+          return `<div class="katex-display">${katex.renderToString(math, {
+            displayMode: true,
+            throwOnError: false,
+          })}</div>`;
+        });
+
+        processed = processed.replace(/\$(.+?)\$/g, (_, math) => {
+          return `<span class="katex-inline">${katex.renderToString(math, {
+            displayMode: false,
+            throwOnError: false,
+          })}</span>`;
+        });
+
+        return processed;
+      }
+
+      // If no $ delimiters but question/option is marked as math, render whole string as inline math
+      if (isMath) {
+        try {
+          return `<span class="katex-inline">${katex.renderToString(processed, {
+            displayMode: false,
+            throwOnError: false,
+          })}</span>`;
+        } catch (e) {
+          // Fallback to plain text on KaTeX error
+          return processed;
+        }
+      }
+
+      // Non-math text, return as-is
+      return processed;
     },
     async submitAnswers() {
       this.submitting = true;

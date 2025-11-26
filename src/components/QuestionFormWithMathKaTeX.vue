@@ -3,8 +3,8 @@
     <!-- Question Settings -->
     <div class="form-section mb-4">
       <h3 class="section-subtitle mb-3">Question Settings</h3>
-      <div class="row g-3 align-items-end">
-        <div class="col-md-4">
+      <div class="row g-3 align-items-end question-settings-row">
+        <div class="col-md-4 col-lg-3">
           <label for="question_type" class="form-label">
             Question Type <span class="required-mark">*</span>
           </label>
@@ -20,8 +20,8 @@
             <option value="matching">Matching</option>
           </select>
         </div>
-        <div class="col-md-4">
-          <label for="difficulty" class="form-label">Difficulty Level</label>
+        <div class="col-md-4 col-lg-4">
+          <label for="difficulty" class="form-label">Difficulty</label>
           <select v-model="form.difficulty" id="difficulty" class="form-select">
             <option value="">Select difficulty</option>
             <option value="remembering">Remembering</option>
@@ -31,6 +31,29 @@
             <option value="evaluating">Evaluating</option>
             <option value="creating">Creating</option>
           </select>
+        </div>
+        <div class="col-md-4 col-lg-4">
+          <label for="marks" class="form-label d-flex justify-content-between align-items-center">
+            <span>Marks</span>
+            <span
+              class="text-muted small ms-2"
+              :title="['matching', 'short_answer'].includes(questionType)
+                ? 'For matching and short answer, the value you enter is used exactly.'
+                : 'For other types, leave blank to auto-set from difficulty, or enter a custom value.'"
+            >
+              (hint)
+            </span>
+          </label>
+          <div class="input-group input-group-sm" style="max-width: 180px;">
+            <input
+              id="marks"
+              type="number"
+              min="0"
+              class="form-control form-control-sm"
+              v-model.number="form.marks"
+            />
+            <span class="input-group-text">points</span>
+          </div>
         </div>
       </div>
     </div>
@@ -173,6 +196,49 @@
             :value="option"
             readonly
           />
+          <label
+            v-if="questionType === 'mcq'"
+            class="btn btn-outline-secondary btn-sm ms-2"
+            title="Add image for this option"
+          >
+            <input
+              type="file"
+              accept="image/*"
+              @change="onOptionImageChange($event, idx)"
+              style="display: none"
+            />
+            <svg
+              width="16"
+              height="16"
+              fill="none"
+              stroke="#888"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+            >
+              <path
+                d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h7m4 0h5v5m-9 9l9-9"
+              />
+            </svg>
+          </label>
+          <div
+            v-if="questionType === 'mcq' && optionImagePreviews[idx]"
+            class="ms-2 d-flex align-items-center"
+          >
+            <img
+              :src="optionImagePreviews[idx]"
+              alt="Option Image Preview"
+              class="img-thumbnail"
+              style="max-width: 72px; max-height: 48px; object-fit: contain"
+            />
+            <button
+              type="button"
+              class="btn btn-outline-danger btn-sm ms-1"
+              @click="clearOptionImage(idx)"
+              title="Remove image"
+            >
+              &times;
+            </button>
+          </div>
           <button
             v-if="questionType === 'mcq' && form.options.length > 2"
             type="button"
@@ -415,6 +481,7 @@ export default {
         correct_answer: "",
         explanation: "",
         difficulty: "remembering",
+        marks: 1,
         is_math: false,
         is_chemistry: false,
         multiple_answers: false,
@@ -424,6 +491,8 @@ export default {
       },
       answerText: "",
       questionImage: null,
+      optionImages: [],
+      optionImagePreviews: [],
       showAdditionalInfo: false,
       questionImagePreview: "",
       error: "",
@@ -495,6 +564,7 @@ export default {
     }
     this.form.explanation = q.explanation || "";
     this.form.difficulty = q.difficulty_level || "remembering";
+    this.form.marks = typeof q.marks === "number" ? q.marks : (q.marks ? Number(q.marks) || 1 : 1);
     this.form.is_math = !!q.is_math;
     this.form.is_chemistry = !!q.is_chemistry;
     this.form.multiple_answers = !!q.multiple_answers;
@@ -510,6 +580,24 @@ export default {
       ];
     }
 
+    if (this.questionType === "mcq" && Array.isArray(q.options)) {
+      // Initialize previews from existing stored images (edit mode)
+      this.optionImagePreviews = q.options.map((opt) => {
+        if (opt && typeof opt === "object" && opt.image) {
+          return this.getStoredImageUrl(opt.image);
+        }
+        return "";
+      });
+      this.optionImages = q.options.map(() => null);
+    } else {
+      this.optionImages = Array.isArray(this.form.options)
+        ? this.form.options.map(() => null)
+        : [];
+      this.optionImagePreviews = Array.isArray(this.form.options)
+        ? this.form.options.map(() => "")
+        : [];
+    }
+
     // 5️⃣ Load question image preview
     if (q.question_image_url) {
       this.questionImagePreview = q.question_image_url;
@@ -520,6 +608,19 @@ export default {
   },
 
   methods: {
+    getStoredImageUrl(path) {
+      if (!path) return "";
+      if (path.startsWith("http://") || path.startsWith("https://")) {
+        return path;
+      }
+      try {
+        const base = (axios.defaults.baseURL || "").replace(/\/?api\/?$/i, "");
+        if (base) {
+          return `${base}/storage/${path}`;
+        }
+      } catch {}
+      return `/storage/${path}`;
+    },
     insertEquation() {
       if (this.mathEquation.trim()) {
         this.questionText += ` $${this.mathEquation}$ `;
@@ -712,13 +813,68 @@ export default {
     },
     addOption() {
       this.form.options.push("");
+      this.optionImages.push(null);
+      this.optionImagePreviews.push("");
     },
     removeOption(idx) {
       if (this.form.options.length > 2) {
         const removed = this.form.options.splice(idx, 1)[0];
+        if (this.optionImages && this.optionImages.length > idx) {
+          this.optionImages.splice(idx, 1);
+        }
+        if (this.optionImagePreviews && this.optionImagePreviews.length > idx) {
+          const url = this.optionImagePreviews[idx];
+          if (url && typeof URL !== "undefined") {
+            try {
+              URL.revokeObjectURL(url);
+            } catch {}
+          }
+          this.optionImagePreviews.splice(idx, 1);
+        }
         if (this.form.correct_answer === removed) {
           this.form.correct_answer = "";
         }
+      }
+    },
+    onOptionImageChange(e, idx) {
+      const file = e.target.files[0];
+      if (!this.optionImages) {
+        this.optionImages = [];
+      }
+      // store file
+      this.$set ? this.$set(this.optionImages, idx, file || null) : (this.optionImages[idx] = file || null);
+
+      // update preview URL
+      if (!this.optionImagePreviews) {
+        this.optionImagePreviews = [];
+      }
+      const existingUrl = this.optionImagePreviews[idx];
+      if (existingUrl && typeof URL !== "undefined") {
+        try {
+          URL.revokeObjectURL(existingUrl);
+        } catch {}
+      }
+      const nextUrl = file ? URL.createObjectURL(file) : "";
+      this.$set
+        ? this.$set(this.optionImagePreviews, idx, nextUrl)
+        : (this.optionImagePreviews[idx] = nextUrl);
+    },
+    clearOptionImage(idx) {
+      if (this.optionImages && this.optionImages.length > idx) {
+        this.$set
+          ? this.$set(this.optionImages, idx, null)
+          : (this.optionImages[idx] = null);
+      }
+      if (this.optionImagePreviews && this.optionImagePreviews.length > idx) {
+        const url = this.optionImagePreviews[idx];
+        if (url && typeof URL !== "undefined") {
+          try {
+            URL.revokeObjectURL(url);
+          } catch {}
+        }
+        this.$set
+          ? this.$set(this.optionImagePreviews, idx, "")
+          : (this.optionImagePreviews[idx] = "");
       }
     },
     onQuestionImageChange(e) {
@@ -797,6 +953,15 @@ export default {
         }
       }
 
+      // Normalize MCQ options: if text is empty but images are used, assign fallback labels
+      if (this.questionType === "mcq") {
+        this.form.options = this.form.options.map((opt, idx) => {
+          const val = (opt || "").toString().trim();
+          if (val !== "") return val;
+          return `Option ${String.fromCharCode(65 + idx)}`;
+        });
+      }
+
       // Prepare FormData
       const formData = new FormData();
 
@@ -826,12 +991,29 @@ export default {
       if (["mcq", "true_false"].includes(this.questionType)) {
         this.form.options.forEach((opt, i) => {
           formData.append(`options[${i}]`, opt);
+          if (this.questionType === "mcq" && this.optionImages && this.optionImages[i]) {
+            formData.append(`option_images[${i}]`, this.optionImages[i]);
+          }
         });
       } else if (this.questionType === "matching") {
         formData.append("options", optionsToSend);
       } else {
         // Always send at least one empty option for other types to satisfy backend
         formData.append("options[]", "");
+      }
+
+      // Marks & difficulty
+      // For matching and short_answer, always send user-entered marks (default 1 if empty).
+      // For other types, only send marks when provided; otherwise backend will auto-calc from difficulty.
+      const rawMarks = this.form.marks;
+      if (["matching", "short_answer"].includes(this.questionType)) {
+        let effectiveMarks = rawMarks;
+        if (effectiveMarks === null || effectiveMarks === undefined || effectiveMarks === "") {
+          effectiveMarks = 1;
+        }
+        formData.append("marks", String(effectiveMarks));
+      } else if (rawMarks !== null && rawMarks !== undefined && rawMarks !== "") {
+        formData.append("marks", String(rawMarks));
       }
 
       formData.append("explanation", this.form.explanation || "");

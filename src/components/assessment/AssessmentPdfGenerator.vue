@@ -7,6 +7,7 @@
 import html2pdf from "html2pdf.js";
 import katex from "katex";
 import "katex/dist/katex.min.css";
+import axios from "axios";
 
 export default {
   name: "AssessmentPdfGenerator",
@@ -15,14 +16,13 @@ export default {
       if (!path) return "";
       const p = String(path);
       if (/^https?:\/\//i.test(p)) return p; // already absolute
-      const base =
-        (import.meta &&
-          import.meta.env &&
-          import.meta.env.VITE_BACKEND_BASE_URL) ||
-        "";
-      const baseClean = String(base || "").replace(/\/$/, "");
+      let base = axios.defaults.baseURL || "";
+      base = base.replace(/\/$/, "");
+
+      base = base.replace(/\/api$/i, "");
+
       const rel = p.replace(/^\/?storage\//i, "").replace(/^\//, "");
-      return `${baseClean}/storage/${rel}`;
+      return `${base}/storage/${rel}`;
     },
     escapeHtml(s) {
       if (s == null) return "";
@@ -339,9 +339,9 @@ export default {
         // Image
         if (q.question_image) {
           const img = document.createElement("img");
-          img.src = q.question_image;
-          img.style.maxWidth = "320px";
-          img.style.maxHeight = "180px";
+          img.src = this.storageUrl(q.question_image);
+          img.style.maxWidth = "500px";
+          img.style.maxHeight = "300px";
           img.style.display = "block";
           img.style.margin = "10px auto 10px auto";
           img.style.borderRadius = "8px";
@@ -519,12 +519,31 @@ export default {
             optDiv.style.wordBreak = "normal";
             optDiv.style.overflowWrap = "break-word";
             optDiv.style.hyphens = "none";
+
             const textHtml = q.is_math
               ? this.renderSmartMath(opt.option_text, { allowBlock: false })
               : this.escapeHtml(opt.option_text);
-            optDiv.innerHTML = `<strong style=\"color:#4f46e5\">${String.fromCharCode(65 + oidx)}.</strong> ${textHtml} ${
-              isTeacher && opt.is_correct ? '<span style=\"color:green; font-weight: bold;\">(✔)</span>' : ""
-            }`;
+            const correctMark = isTeacher && opt.is_correct
+              ? '<span style=\"color:green; font-weight: bold;\">(✔)</span>'
+              : "";
+
+            // Base text content
+            optDiv.innerHTML = `<strong style=\"color:#4f46e5\">${String.fromCharCode(65 + oidx)}.</strong> ${textHtml} ${correctMark}`;
+
+            // Optional option image
+            if (opt.option_image) {
+              const img = document.createElement("img");
+              img.src = this.storageUrl(opt.option_image);
+              img.style.maxWidth = "260px";
+              img.style.maxHeight = "140px";
+              img.style.display = "block";
+              img.style.marginTop = "6px";
+              img.style.borderRadius = "6px";
+              img.style.pageBreakInside = "avoid";
+              img.style.breakInside = "avoid";
+              optDiv.appendChild(img);
+            }
+
             optsWrap.appendChild(optDiv);
           });
           questionDiv.appendChild(optsWrap);

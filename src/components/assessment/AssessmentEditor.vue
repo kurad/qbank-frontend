@@ -25,6 +25,16 @@
           <span>{{ exportingStudent ? 'Exporting...' : 'Student PDF' }}</span>
         </button>
         <button
+          class="btn btn-outline-primary btn-sm me-2"
+          title="Export Student Version (with Sections)"
+          @click="exportStandardStudentPdf"
+          :disabled="exportingStudent || exportingTeacher"
+        >
+          <span v-if="exportingStudent" class="spinner-border spinner-border-sm me-1"></span>
+          <i v-else class="bi bi-files me-1"></i>
+          <span>{{ exportingStudent ? 'Exporting...' : 'Standard Student PDF' }}</span>
+        </button>
+        <button
           class="btn btn-outline-success btn-sm me-3"
           title="Export Marking Guide"
           @click="exportTeacherPdf"
@@ -78,8 +88,32 @@
       </div>
     </div>
 
+    <!-- Tabs -->
+    <ul class="nav nav-tabs mb-3">
+      <li class="nav-item">
+        <button
+          class="nav-link"
+          :class="{ active: currentTab === 'questions' }"
+          type="button"
+          @click="currentTab = 'questions'"
+        >
+          Questions
+        </button>
+      </li>
+      <li class="nav-item">
+        <button
+          class="nav-link"
+          :class="{ active: currentTab === 'sections' }"
+          type="button"
+          @click="currentTab = 'sections'"
+        >
+          Sections
+        </button>
+      </li>
+    </ul>
+
     <!-- Questions Section -->
-    <div class="card shadow-sm mb-4">
+    <div v-if="currentTab === 'questions'" class="card shadow-sm mb-4">
       <div class="card-header bg-primary text-white fw-semibold">Questions</div>
       <div class="card-body">
         <draggable
@@ -98,7 +132,14 @@
                 >
                 <div>
                   <div v-html="element.question.question"></div>
-                  <small class="text-muted">
+                  <img
+                    v-if="element.question.question_image || element.question.question_image_url"
+                    :src="getQuestionImageUrl(element.question)"
+                    alt="Question Image"
+                    class="img-thumbnail mt-1"
+                    style="max-width: 220px; max-height: 150px; object-fit: contain;"
+                  />
+                  <small class="text-muted d-block mt-1">
                     Type: {{ element.question.question_type }} | Points:
                     {{ element.question.marks }}
                   </small>
@@ -106,15 +147,24 @@
                   <div class="mt-2">
                     <!-- MCQ -->
                     <div v-if="element.question.question_type === 'mcq'"
-                         class="mb-2 d-flex flex-wrap align-items-center gap-3 ps-1">
+                         class="mb-2 d-flex flex-wrap align-items-start gap-3 ps-1">
                       <div v-for="(opt, oi) in parseOptions(element.question.options)"
                            :key="oi"
-                           class="d-inline-flex align-items-center"
+                           class="d-inline-flex flex-column"
                            :class="{ 'text-success fw-semibold': isCorrectOption(element.question.correct_answer, getOptionValue(opt)) }">
-                        <span class="me-1 text-muted">{{ String.fromCharCode(65 + oi) }}.</span>
-                        <span>{{ getOptionValue(opt) }}</span>
-                        <i v-if="isCorrectOption(element.question.correct_answer, getOptionValue(opt))"
-                           class="bi bi-check-circle ms-1"></i>
+                        <div class="d-flex align-items-center">
+                          <span class="me-1 text-muted">{{ String.fromCharCode(65 + oi) }}.</span>
+                          <span>{{ getOptionValue(opt) }}</span>
+                          <i v-if="isCorrectOption(element.question.correct_answer, getOptionValue(opt))"
+                             class="bi bi-check-circle ms-1"></i>
+                        </div>
+                        <img
+                          v-if="getOptionImageUrl(opt)"
+                          :src="getOptionImageUrl(opt)"
+                          alt="Option Image"
+                          class="img-thumbnail mt-1"
+                          style="max-width: 180px; max-height: 120px; object-fit: contain;"
+                        />
                       </div>
                     </div>
 
@@ -180,7 +230,7 @@
 
         <!-- Add Question Section -->
         <div class="mt-3">
-          <button class="btn btn-outline-primary btn-sm" @click="openAddModal">
+          <button class="btn btn-outline-primary btn-sm" @click="showAddModal = true">
             Add more Questions
           </button>
         </div>
@@ -188,7 +238,7 @@
     </div>
 
     <!-- Save Questions -->
-    <div class="card shadow-sm mb-4">
+    <div v-if="currentTab === 'questions'" class="card shadow-sm mb-4">
       <div class="card-body">
         <button
           class="btn btn-primary"
@@ -201,262 +251,52 @@
         <span v-if="saveSuccess" class="text-success ms-2">✅ Saved!</span>
       </div>
     </div>
+
+    <!-- Sections Manager -->
+    <SectionsTab
+      v-if="currentTab === 'sections'"
+      :assessment="assessment"
+      :local-questions="localQuestions"
+    />
+
+   
   </div>
-
-  <!-- Loading State -->
-  <div v-else class="text-center py-5">
-    <div class="spinner-border text-primary" role="status"></div>
-    <p class="mt-2 text-muted">Loading assessment...</p>
-  </div>
-
-  <!-- Add Questions Modal -->
-  <div class="modal fade" tabindex="-1" ref="addModalEl">
-    <div class="modal-dialog modal-xl">
-      <div class="modal-content">
-        <div class="modal-header bg-primary text-white">
-          <h5 class="modal-title">Add Questions to Assessment</h5>
-          <button
-            type="button"
-            class="btn-close"
-            @click="closeAddModal"
-          ></button>
-        </div>
-
-        <div class="modal-body">
-          <!-- Step 1 -->
-          <div v-if="addStep === 1">
-            <div class="row">
-              <div class="col-md-4 mb-3">
-                <label class="form-label">Grade Level</label>
-                <select
-                  v-model="addForm.grade_level_id"
-                  class="form-select"
-                  @change="onAddGradeChange"
-                >
-                  <option value="">Choose</option>
-                  <option v-for="g in gradeLevels" :key="g.id" :value="g.id">
-                    {{ g.grade_name }}
-                  </option>
-                </select>
-              </div>
-
-              <div class="col-md-4 mb-3">
-                <label class="form-label">Subject</label>
-                <select
-                  v-model="addForm.subject_id"
-                  class="form-select"
-                  @change="loadAddTopics"
-                >
-                  <option value="">Choose</option>
-                  <option v-for="s in subjects" :key="s.id" :value="s.id">
-                    {{ s.name }}
-                  </option>
-                </select>
-              </div>
-
-              <div class="col-md-4 mb-3">
-                <label class="form-label">Topics</label>
-                <div class="topic-picker border rounded p-2 bg-white">
-                  <div class="d-flex align-items-center flex-wrap">
-                    <span
-                      v-for="id in addForm.topic_ids"
-                      :key="id"
-                      class="badge bg-primary text-truncate topic-chip me-2 mb-2"
-                    >
-                      {{ getAddTopicName(id) }}
-                      <button
-                        type="button"
-                        class="btn-close btn-close-white btn-sm ms-2"
-                        @click="toggleAddTopic(id)"
-                        aria-label="Remove"
-                      ></button>
-                    </span>
-
-                    <input
-                      v-model="addTopicQuery"
-                      @input="filterAddTopicOptions"
-                      @keydown.enter.prevent="addAddTopicFromQuery"
-                      class="form-control form-control-sm border-0 p-0 flex-grow-1"
-                      placeholder="Search and press Enter to add"
-                      style="min-width: 120px"
-                    />
-                  </div>
-
-                  <div v-if="loadingAddTopics" class="mt-2 text-muted small">
-                    Loading topics...
-                  </div>
-                  <div
-                    v-else-if="filteredAddTopicOptions.length"
-                    class="topic-options mt-2"
-                  >
-                    <button
-                      v-for="opt in filteredAddTopicOptions"
-                      :key="opt.id"
-                      class="btn btn-sm btn-light me-2 mb-2"
-                      @click="selectAddTopic(opt)"
-                    >
-                      {{ opt.topic_name }}
-                    </button>
-                  </div>
-                  <div v-else class="text-muted small mt-2">
-                    Type to search topics
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="d-flex justify-content-end">
-              <button
-                class="btn btn-primary"
-                @click="loadAddQuestions"
-                :disabled="!addForm.topic_ids.length || loadingAddQuestions"
-              >
-                {{ loadingAddQuestions ? "Loading..." : "Load Questions" }}
-              </button>
-            </div>
-          </div>
-
-          <!-- Step 2 -->
-          <div v-if="addStep === 2">
-            <div class="row">
-              <div class="col-md-7">
-                <h6>Available Questions</h6>
-                <div v-if="addQuestions.length === 0" class="text-muted">
-                  No questions for selected topics
-                </div>
-
-                <div
-                  v-for="q in addQuestions"
-                  :key="q.id"
-                  class="border rounded p-3 shadow-sm"
-                  :class="{ 'opacity-50': existingQuestionIds.has(q.id) }"
-                >
-                  <div class="form-check mb-2">
-                    <input
-                      class="form-check-input me-2"
-                      type="checkbox"
-                      :id="'addq' + q.id"
-                      :value="q.id"
-                      v-model="addSelected"
-                      :disabled="existingQuestionIds.has(q.id)"
-                    />
-                    <label
-                      class="form-check-label fw-bold"
-                      :for="'addq' + q.id"
-                      v-html="q.question"
-                    ></label>
-                    <span
-                      v-if="existingQuestionIds.has(q.id)"
-                      class="badge bg-secondary ms-2"
-                    >Already Added</span>
-                  </div>
-                  <!-- MCQ Options -->
-                  <ul
-                    v-if="q.question_type === 'mcq'"
-                    class="list-group-flush mb-2"
-                  >
-                    <li
-                      v-for="(option, idx) in parseOptions(q.options)"
-                      :key="idx"
-                      class="list-group-item d-flex justify-content-between align-items-center"
-                      :class="{
-                        'list-group-item-success': option === q.correct_answer,
-                      }"
-                    >
-                      <div>
-                        <strong>{{ String.fromCharCode(65 + idx) }}.</strong>
-                        <span class="ms-2">{{ option }}</span>
-                      </div>
-                      <i
-                        v-if="option === q.correct_answer"
-                        class="bi bi-check-circle text-success"
-                      ></i>
-                    </li>
-                  </ul>
-                  <!-- True/False -->
-                  <div
-                    v-else-if="q.question_type === 'true_false'"
-                    class="mb-2"
-                  >
-                    <strong>Answer:</strong>
-                    <span class="text-success">{{ q.correct_answer }}</span>
-                  </div>
-                  <!-- Other Question Types -->
-                  <div v-else class="mb-2">
-                    <strong>Answer: </strong> {{ q.correct_answer }}
-                  </div>
-                  <small class="text-muted">
-                    Topic: {{ q.topic.topic_name }} | Difficulty:
-                    {{ q.difficulty_level }} | Points: {{ q.marks }}
-                  </small>
-                </div>
-              </div>
-
-              <div class="col-md-5">
-                <h6>Selected ({{ addSelected.length }})</h6>
-                <ul class="list-group mb-3">
-                  <li
-                    v-for="id in addSelected"
-                    :key="id"
-                    class="list-group-item"
-                  >
-                    {{ getAddQuestionText(id) }}
-                  </li>
-                </ul>
-
-                <button
-                  class="btn btn-success w-100"
-                  :disabled="adding || !addSelected.length"
-                  @click="addSelectedQuestions"
-                >
-                  {{ adding ? "Adding..." : "Add Selected Questions" }}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button
-            v-if="addStep === 2"
-            class="btn btn-secondary"
-            @click="addStep = 1"
-          >
-            Back
-          </button>
-          <button
-            v-if="addStep === 1"
-            class="btn btn-light"
-            @click="closeAddModal"
-          >
-            Cancel
-          </button>
-          <button
-            v-if="addStep === 2"
-            class="btn btn-outline-secondary"
-            @click="clearAddSelection"
-          >
-            Clear
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
+  <AddQuestionsModal
+    v-model="showAddModal"
+    :assessment-id="assessment.id"
+    :existing-question-ids="new Set(localQuestions.map(q => q.question.id))"
+    @add-questions="handleAddQuestions"
+  />
+  <!-- Headless PDF generator for student/teacher exports -->
   <AssessmentPdfGenerator ref="pdfGen" />
+  <!-- Headless PDF generator for standard (sections-based) exports -->
+  <StandardAssessmentPdfGenerator ref="standardPdfGen" />
 </template>
 
 <script>
 import draggable from "vuedraggable";
 import axios from "axios";
 import { Modal } from "bootstrap";
-import AssessmentPdfGenerator from "@/components/assessment/AssessmentPdfGenerator.vue";
+import {
+  parseOptions,
+  getOptionValue,
+  isCorrectOption,
+  getMatchingItems,
+  getOptionImageUrl,
+  getQuestionImageUrl,
+} from "@/utils/questionDisplay";
+import AddQuestionsModal from "./AddQuestionsModal.vue";
+import SectionsTab from "./SectionsTab.vue";
+import AssessmentPdfGenerator from "./AssessmentPdfGenerator.vue";
+import StandardAssessmentPdfGenerator from "./StandardAssessmentPdfGenerator.vue";
 
 export default {
   name: "AssessmentEditor",
-  components: { draggable, AssessmentPdfGenerator },
+  components: { draggable, AddQuestionsModal, SectionsTab, AssessmentPdfGenerator, StandardAssessmentPdfGenerator },
 
   data() {
     return {
+      showAddModal: false,
       assessment: {},
       allQuestions: [],
       students: [],
@@ -470,7 +310,22 @@ export default {
       exportingStudent: false,
       exportingTeacher: false,
       deleting: false,
-      // Add modal data
+      currentTab: "questions",
+      // Sections state (now handled in SectionsTab but kept for compatibility)
+      sections: [],
+      sectionsLoading: false,
+      sectionsLoaded: false,
+      sectionsError: "",
+      creatingSection: false,
+      activeSectionId: null,
+      sectionQuestionSelection: [],
+      savingSectionQuestions: false,
+      sectionWarnings: [],
+      newSection: {
+        title: "",
+        instruction: "",
+      },
+      // Add Questions modal state (two-step topic-based picker)
       addModal: null,
       addStep: 1,
       gradeLevels: [],
@@ -488,284 +343,262 @@ export default {
       },
       addTopicQuery: "",
       filteredAddTopicOptions: [],
-      // title edit
-      editingTitle: false,
-      editableTitle: '',
-      savingTitle: false,
-      titleSavedAt: 0,
     };
-  },
-
-  computed: {
-    availableQuestions() {
-      const existingIds = new Set(
-        this.localQuestions.map((q) => q.question.id)
-      );
-      return this.allQuestions.filter((q) => !existingIds.has(q.id));
-    },
-    existingQuestionIds() {
-      try {
-        return new Set(this.localQuestions.map((q) => q.question.id));
-      } catch (_) {
-        return new Set();
-      }
-    },
-    totalMarks() {
-      try {
-        return this.localQuestions.reduce((sum, item) => {
-          const m = Number(item?.question?.marks ?? 0);
-          return sum + (isNaN(m) ? 0 : m);
-        }, 0);
-      } catch (_) {
-        return 0;
-      }
-    },
   },
 
   mounted() {
     this.loadData();
   },
 
-  beforeUnmount() {
-    if (this.addModal) {
-      try {
-        this.addModal.hide();
-      } catch (e) {}
-      if (typeof this.addModal.dispose === "function") {
-        try {
-          this.addModal.dispose();
-        } catch (e) {}
-      }
-      this.addModal = null;
-    }
-  },
-
-  beforeDestroy() {
-    if (this.addModal) {
-      try {
-        this.addModal.hide();
-      } catch (e) {}
-      if (typeof this.addModal.dispose === "function") {
-        try {
-          this.addModal.dispose();
-        } catch (e) {}
-      }
-      this.addModal = null;
-    }
-  },
-
   methods: {
-    startEditTitle() {
-      this.editingTitle = true;
-      this.editableTitle = String(this.assessment?.title || '');
+    async handleAddQuestions(ids) {
+      const calls = ids.map((id) => axios.get(`/questions/${id}`));
+      const results = await Promise.all(calls);
+      const newQs = results.map((r) => r.data);
+
+      const existingIds = new Set(this.localQuestions.map((q) => q.question.id));
+      newQs.forEach((q) => {
+        if (q && q.id && !existingIds.has(q.id)) {
+          this.localQuestions.push({ question: q });
+        }
+      });
     },
-    cancelEditTitle() {
-      this.editingTitle = false;
-      this.editableTitle = '';
-    },
-    async saveAssessmentTitle() {
-      if (!this.assessment?.id) return;
-      const title = (this.editableTitle || '').trim();
-      if (!title) return;
-      this.savingTitle = true;
+
+    async loadData() {
+      const id = this.$route.params.id;
+      this.loaded = false;
       try {
-        await axios.patch(`/assessments/${this.assessment.id}`, { title });
-        this.assessment = { ...this.assessment, title };
-        this.titleSavedAt = Date.now();
-        this.editingTitle = false;
-      } catch (e) {
-        alert('Failed to save title');
+        const [assessmentRes, questionsRes] = await Promise.all([
+          axios.get(`/assessments/${id}/details`),
+          axios.get("/questions/all"),
+        ]);
+        const assessment = assessmentRes.data.assessment || {};
+        this.assessment = assessment;
+        this.localQuestions = Array.isArray(assessment.questions)
+          ? [...assessment.questions]
+          : [];
+        this.allQuestions = Array.isArray(questionsRes.data)
+          ? questionsRes.data
+          : questionsRes.data?.data || [];
+      } catch (error) {
+        console.error("❌ Failed to load assessment:", error);
+        alert("Failed to load assessment.");
       } finally {
-        this.savingTitle = false;
-      }
-    },
-    async confirmDelete() {
-      const name = this.assessment?.title || 'Untitled';
-      const proceed = confirm(`Delete assessment "${name}"? This cannot be undone.`);
-      if (!proceed) return;
-      await this.deleteAssessment();
-    },
-    async deleteAssessment() {
-      if (!this.assessment?.id) return;
-      this.deleting = true;
-      try {
-        const token = localStorage.getItem('auth_token');
-        const res = await axios.delete(`/assessments/${this.assessment.id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const msg = res?.data?.message || res?.data?.data?.message || 'Assessment deleted successfully';
-        if (this.$showToast) this.$showToast(msg, 'success');
-        this.$router.push({ name: 'create-assessment' });
-      } catch (err) {
-        const backend = err?.response?.data;
-        const msg = backend?.message || backend?.error || 'Failed to delete assessment';
-        if (this.$showToast) this.$showToast(msg, 'danger');
-        console.error('Delete assessment failed:', err);
-      } finally {
-        this.deleting = false;
-      }
-    },
-    buildPdfQuestions() {
-      try {
-        return (this.localQuestions || []).map((item) => {
-          const q = item?.question || {};
-          const type = String(q.question_type || '').toLowerCase();
-          const correct = q.correct_answer;
-
-          // Matching support
-          if (type === 'matching') {
-            let opts = q.options;
-            if (typeof opts === 'string') {
-              try { opts = JSON.parse(opts); } catch { opts = {}; }
-            }
-            const left = Array.isArray(opts?.left) ? opts.left : [];
-            const right = Array.isArray(opts?.right) ? opts.right : [];
-            let pairs = correct;
-            if (typeof pairs === 'string') {
-              try { pairs = JSON.parse(pairs); } catch { pairs = []; }
-            }
-            if (!Array.isArray(pairs)) pairs = [];
-
-            return {
-              id: q.id,
-              question_text: q.question || q.question_text || '',
-              is_math: !!q.is_math,
-              question_type: type,
-              question_image: q.question_image_url || q.question_image || null,
-              matching_items: { left, right },
-              matching_pairs: pairs,
-              marks: q.marks || 0,
-            };
-          }
-
-          // MCQ / True-False
-          const optsRaw = this.parseOptions(q.options);
-          const options = type === 'true_false'
-            ? []
-            : (optsRaw || []).map((opt) => {
-                const text = this.getOptionValue(opt);
-                let isCorrect = false;
-                if (opt && typeof opt === 'object' && 'is_correct' in opt) {
-                  isCorrect = !!opt.is_correct;
-                } else {
-                  isCorrect = this.isCorrectOption(correct, text);
-                }
-                return { option_text: text, is_correct: isCorrect };
-              });
-
-          return {
-            id: q.id,
-            question_text: q.question || q.question_text || '',
-            is_math: !!q.is_math,
-            question_type: type,
-            question_image: q.question_image_url || q.question_image || null,
-            options,
-            correct_answer: type === 'true_false' ? String(correct || '').toLowerCase() : correct,
-            marks: q.marks || 0,
-          };
-        });
-      } catch (_) {
-        return [];
+        this.loaded = true;
       }
     },
 
-    // Download helpers for backend-generated PDFs
-    saveBlob(blob, fallbackName) {
-      try {
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fallbackName || 'assessment.pdf';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-      } catch (_) {}
+    confirmDelete() {
+      alert("Delete assessment is not wired yet.");
     },
 
     async exportStudentPdf() {
-      if (!this.assessment?.id) return;
+      if (!this.assessment?.id || !this.localQuestions.length) {
+        alert("No questions to export.");
+        return;
+      }
+      const gen = this.$refs.pdfGen;
+      if (!gen || typeof gen.generatePdf !== "function") {
+        alert("PDF generator is not available.");
+        return;
+      }
+      // Map localQuestions (wrapper objects) into plain question objects
+      const qs = this.localQuestions.map((item) => {
+        const q = item.question || {};
+        let options = q.options;
+        if (q.question_type === "mcq") {
+          try {
+            // Use same helper as UI to normalize options
+            const parsed = parseOptions(q.options);
+            options = parsed.map((opt) => ({
+              option_text: getOptionValue(opt),
+              option_image: getOptionImageUrl(opt) || null,
+              is_correct: isCorrectOption(q.correct_answer, getOptionValue(opt)),
+            }));
+          } catch (e) {
+            options = [];
+          }
+        }
+        return {
+          ...q,
+          question_text: q.question_text || q.question || "",
+          is_math: q.is_math || false,
+          options,
+        };
+      });
       this.exportingStudent = true;
       try {
-        const qs = this.buildPdfQuestions();
-        await this.$refs.pdfGen.generatePdf(this.assessment, qs, false);
+        await gen.generatePdf(this.assessment, qs, false /* isTeacher */);
       } catch (e) {
-        console.error('Student PDF export failed', e);
+        console.error("Failed to export student PDF", e);
+        alert("Failed to export student PDF.");
       } finally {
         this.exportingStudent = false;
       }
     },
 
     async exportTeacherPdf() {
-      if (!this.assessment?.id) return;
+      if (!this.assessment?.id || !this.localQuestions.length) {
+        alert("No questions to export.");
+        return;
+      }
+      const gen = this.$refs.pdfGen;
+      if (!gen || typeof gen.generatePdf !== "function") {
+        alert("PDF generator is not available.");
+        return;
+      }
+      const qs = this.localQuestions.map((item) => {
+        const q = item.question || {};
+        let options = q.options;
+        if (q.question_type === "mcq") {
+          try {
+            const parsed = parseOptions(q.options);
+            options = parsed.map((opt) => ({
+              option_text: getOptionValue(opt),
+              option_image: getOptionImageUrl(opt) || null,
+              is_correct: isCorrectOption(q.correct_answer, getOptionValue(opt)),
+            }));
+          } catch (e) {
+            options = [];
+          }
+        }
+        return {
+          ...q,
+          question_text: q.question_text || q.question || "",
+          is_math: q.is_math || false,
+          options,
+        };
+      });
       this.exportingTeacher = true;
       try {
-        const qs = this.buildPdfQuestions();
-        await this.$refs.pdfGen.generatePdf(this.assessment, qs, true);
+        await gen.generatePdf(this.assessment, qs, true /* isTeacher */);
       } catch (e) {
-        console.error('Teacher PDF export failed', e);
+        console.error("Failed to export teacher PDF", e);
+        alert("Failed to export teacher PDF.");
       } finally {
         this.exportingTeacher = false;
       }
     },
-    async loadData() {
-      const id = this.$route.params.id;
-      this.loaded = false;
-      try {
-        const [
-          assessmentRes,
-          questionsRes,
-          studentsRes,
-          gradesRes,
-          subjectsRes,
-        ] = await Promise.all([
-          axios.get(`/assessments/${id}/details`),
-          axios.get("/questions/all"),
-          axios.get("/students"),
-          axios.get("/grade-levels"),
-          axios.get("/subjects"),
-        ]);
 
-        this.assessment = assessmentRes.data.assessment || {};
-        this.allQuestions = questionsRes.data || [];
-        this.students = studentsRes.data || [];
-        this.gradeLevels = gradesRes.data || [];
-        this.subjects = subjectsRes.data || [];
-        this.localQuestions = Array.isArray(this.assessment.questions)
-          ? [...this.assessment.questions]
-          : [];
-        console.log("✅ Assessment loaded successfully", this.assessment);
-      } catch (error) {
-        console.error("❌ Failed to load data:", error);
-        alert("Failed to load assessment or related data.");
+    async exportStandardStudentPdf() {
+      if (!this.assessment?.id) {
+        alert("Assessment ID is missing.");
+        return;
+      }
+      const gen = this.$refs.standardPdfGen;
+      if (!gen || typeof gen.generatePdf !== "function") {
+        alert("Standard PDF generator is not available.");
+        return;
+      }
+
+      this.exportingStudent = true;
+      try {
+        const res = await axios.get(`/assessments/${this.assessment.id}/sections`);
+        const payload = res.data || {};
+        const sections = Array.isArray(payload.sections) ? payload.sections : [];
+        if (!sections.length) {
+          alert("No sections found for this assessment.");
+          return;
+        }
+
+        const normalizeQuestion = (q) => {
+          if (!q) return null;
+          let options = q.options;
+          if (q.question_type === "mcq") {
+            try {
+              const parsed = parseOptions(q.options);
+              options = parsed.map((opt) => ({
+                option_text: getOptionValue(opt),
+                option_image: getOptionImageUrl(opt) || null,
+                is_correct: isCorrectOption(q.correct_answer, getOptionValue(opt)),
+              }));
+            } catch (e) {
+              options = [];
+            }
+          }
+          return {
+            ...q,
+            question_text: q.question_text || q.question || "",
+            is_math: q.is_math || false,
+            options,
+          };
+        };
+
+        const sectionPayload = sections.map((s) => ({
+          id: s.id,
+          ordering: s.ordering,
+          title: s.title,
+          instruction: s.instruction,
+          questions: Array.isArray(s.questions)
+            ? s.questions.map((q) => normalizeQuestion(q)).filter(Boolean)
+            : [],
+        }));
+
+        await gen.generatePdf(this.assessment, sectionPayload, false);
+      } catch (e) {
+        console.error("Failed to export standard student PDF", e);
+        alert("Failed to export standard student PDF.");
       } finally {
-        this.loaded = true;
+        this.exportingStudent = false;
       }
     },
 
+    parseOptions,
+    getOptionValue,
+    isCorrectOption,
+    getMatchingItems,
+    getOptionImageUrl,
+    getQuestionImageUrl,
+
+    // Add Questions modal (two-step topic-based picker)
     openAddModal() {
-      this.addModal = new Modal(this.$refs.addModalEl);
-      this.addModal.show();
+      if (!this.addModal && this.$refs.addModalEl) {
+        this.addModal = new Modal(this.$refs.addModalEl);
+      }
+      if (this.addModal) {
+        this.addModal.show();
+      }
+
+      // Reset form and step
       this.addStep = 1;
-      this.resetAddForm();
+      this.addForm = {
+        grade_level_id: this.assessment.grade_level_id || "",
+        subject_id: this.assessment.subject_id || "",
+        topic_ids: [],
+      };
+      this.addTopicQuery = "";
+      this.filteredAddTopicOptions = [];
+      this.addQuestions = [];
+      this.addSelected = [];
+
+      this.loadAddInitial();
     },
 
     closeAddModal() {
-      if (this.addModal) this.addModal.hide();
-      this.resetAddForm();
+      if (this.addModal) {
+        try {
+          this.addModal.hide();
+        } catch (e) {}
+      }
+      this.addSelected = [];
     },
 
-    resetAddForm() {
-      this.addForm = {
-        grade_level_id: "",
-        subject_id: "",
-        topic_ids: [],
-      };
-      this.addQuestions = [];
+    clearAddSelection() {
       this.addSelected = [];
-      this.addTopics = [];
-      this.addTopicQuery = "";
-      this.filteredAddTopicOptions = [];
+    },
+
+    async loadAddInitial() {
+      try {
+        const [gRes, sRes] = await Promise.all([
+          axios.get("/grade-levels"),
+          axios.get("/subjects"),
+        ]);
+        this.gradeLevels = gRes.data || [];
+        this.subjects = sRes.data || [];
+      } catch (e) {
+        this.gradeLevels = [];
+        this.subjects = [];
+      }
     },
 
     onAddGradeChange() {
@@ -782,7 +615,7 @@ export default {
       if (!this.addForm.grade_level_id || !this.addForm.subject_id) return;
       this.loadingAddTopics = true;
       try {
-        const res = await axios.get(`/topics`, {
+        const res = await axios.get("/topics", {
           params: {
             grade_level_id: this.addForm.grade_level_id,
             subject_id: this.addForm.subject_id,
@@ -840,20 +673,29 @@ export default {
     },
 
     async loadAddQuestions() {
-      if (!this.addForm.topic_ids.length) return alert("Select topics");
+      if (!this.addForm.topic_ids.length) {
+        alert("Select topics first.");
+        return;
+      }
       if (this.loadingAddQuestions) return;
+
       this.loadingAddQuestions = true;
       try {
-        const res = await axios.get("/questions/by-topics", {
-          params: { "topic_ids[]": this.addForm.topic_ids },
+        // Primary: GET /questions/topics with topic_ids[] params
+        const res = await axios.get("/questions/topics", {
+          params: {
+            "topic_ids[]": this.addForm.topic_ids,
+          },
         });
-        this.addQuestions = Array.isArray(res.data)
-          ? res.data
-          : res.data.data || [];
+        const payload = res.data;
+        this.addQuestions = Array.isArray(payload)
+          ? payload
+          : payload.data || [];
         this.addSelected = [];
         this.addStep = 2;
         return;
       } catch (err) {
+        // 404 fallback: fetch per-topic questions and merge
         if (err.response && err.response.status === 404) {
           try {
             const calls = this.addForm.topic_ids.map((id) =>
@@ -889,73 +731,9 @@ export default {
 
     getAddQuestionText(id) {
       const q = this.addQuestions.find((x) => x.id === id);
-      return q
-        ? q.question.length > 80
-          ? q.question.slice(0, 80) + "..."
-          : q.question
-        : "";
-    },
-
-    clearAddSelection() {
-      this.addSelected = [];
-    },
-
-    parseOptions(options) {
-      try {
-        if (typeof options === "string") return JSON.parse(options);
-        return Array.isArray(options) ? options : [];
-      } catch (e) {
-        return [];
-      }
-    },
-
-    getOptionValue(opt) {
-      if (opt == null) return "";
-      if (typeof opt === 'object') {
-        // handle shapes like { option_text, is_correct } or generic
-        if (Object.prototype.hasOwnProperty.call(opt, 'option_text')) return String(opt.option_text ?? '');
-        // fallback: stringify simple object values
-        return String(opt.text ?? opt.value ?? '');
-      }
-      return String(opt);
-    },
-
-    isCorrectOption(correct, candidate) {
-      try {
-        // normalize string booleans and trim
-        const c = typeof correct === 'string' ? correct.trim() : correct;
-        const v = typeof candidate === 'string' ? candidate.trim() : candidate;
-        if (typeof c === 'string' && typeof v === 'string') {
-          return c.toLowerCase() === v.toLowerCase();
-        }
-        // if correct is boolean-like
-        if (typeof c === 'boolean') {
-          const vv = String(v).toLowerCase();
-          return (c && vv === 'true') || (!c && vv === 'false');
-        }
-        return c === v;
-      } catch (_) {
-        return false;
-      }
-    },
-
-    getMatchingItems(q) {
-      const out = { left: [], right: [], pairs: [] };
-      if (!q) return out;
-      // Parse options (which may be JSON string or object with left/right)
-      let opts = q.options;
-      if (typeof opts === 'string') {
-        try { opts = JSON.parse(opts); } catch { opts = {}; }
-      }
-      const left = Array.isArray(opts?.left) ? opts.left : [];
-      const right = Array.isArray(opts?.right) ? opts.right : [];
-      // Parse correct_answer (which may be JSON string of pairs)
-      let pairs = q.correct_answer;
-      if (typeof pairs === 'string') {
-        try { pairs = JSON.parse(pairs); } catch { pairs = []; }
-      }
-      if (!Array.isArray(pairs)) pairs = [];
-      return { left, right, pairs };
+      if (!q || !q.question) return "";
+      const plain = String(q.question).replace(/<[^>]*>/g, "");
+      return plain.length > 80 ? plain.slice(0, 80) + "..." : plain;
     },
 
     addSelectedQuestions() {
@@ -983,8 +761,8 @@ export default {
         return alert("Assessment ID is missing. Try reloading the page.");
       }
       if (!this.localQuestions.length) {
-      return alert("No questions to save.");
-    }
+        return alert("No questions to save.");
+      }
       this.saving = true;
       try {
         await axios.post(`/assessments/${this.assessment.id}/questions`, {

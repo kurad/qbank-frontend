@@ -93,7 +93,7 @@
             <div class="col-12">
               <label class="form-label">Options</label>
               <div class="d-flex flex-wrap gap-2">
-                <div v-for="(opt, oidx) in it.options" :key="oidx" class="input-group input-group-sm" style="max-width: 420px;">
+                <div v-for="(opt, oidx) in it.options" :key="oidx" class="input-group input-group-sm align-items-start" style="max-width: 520px;">
                   <div class="input-group-text">
                     <input type="radio" :name="`ca_${it.uid}`" v-model="it.correct_answer" :value="opt" />
                   </div>
@@ -106,7 +106,15 @@
                     <!-- <textarea v-if="it.useTextarea" class="form-control" v-model="it.options[oidx]" :placeholder="`Option ${String.fromCharCode(65+oidx)}`" rows="3"></textarea> -->
                     <input class="form-control" v-model="it.options[oidx]" :placeholder="`Option ${String.fromCharCode(65+oidx)}`" @paste="onOptionsPaste(it, oidx, $event)" />
                   </template>
-                  <button class="btn btn-outline-danger" v-if="it.options.length>2" @click="it.options.splice(oidx,1)">&times;</button>
+                  <label class="btn btn-outline-secondary ms-1" title="Add image" style="font-size: 0.75rem;">
+                    <input type="file" accept="image/*" style="display:none" @change="onOptionImageChange(it, oidx, $event)" />
+                    Img
+                  </label>
+                  <div v-if="it.optionImagePreviews && it.optionImagePreviews[oidx]" class="ms-1 d-flex flex-column align-items-start">
+                    <img :src="it.optionImagePreviews[oidx]" alt="Option Image Preview" class="img-thumbnail mb-1" style="max-width: 72px; max-height: 48px; object-fit: contain;" />
+                    <button type="button" class="btn btn-outline-danger btn-sm" @click="clearOptionImage(it, oidx)">&times;</button>
+                  </div>
+                  <button class="btn btn-outline-danger ms-1" v-if="it.options.length>2" @click="it.options.splice(oidx,1)">&times;</button>
                 </div>
               </div>
               <div class="mt-2 d-flex gap-2">
@@ -188,24 +196,35 @@
           </template>
 
           <div class="col-12">
-              <div class="row g-2">
-                <div class="col-md-6">
-                  <label class="form-label">Difficulty (Bloom's)</label>
-                  <select class="form-select form-select-sm" v-model="it.difficulty_level">
-                    <option value="remembering">Remembering</option>
-                    <option value="understanding">Understanding</option>
-                    <option value="applying">Applying</option>
-                    <option value="analyzing">Analyzing</option>
-                    <option value="evaluating">Evaluating</option>
-                    <option value="creating">Creating</option>
-                  </select>
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label">Explanation (optional)</label>
-                  <textarea class="form-control form-control-sm" rows="2" v-model="it.explanation"></textarea>
+            <div class="row g-2">
+              <div class="col-md-4">
+                <label class="form-label">Difficulty (Bloom's)</label>
+                <select class="form-select form-select-sm" v-model="it.difficulty_level">
+                  <option value="remembering">Remembering</option>
+                  <option value="understanding">Understanding</option>
+                  <option value="applying">Applying</option>
+                  <option value="analyzing">Analyzing</option>
+                  <option value="evaluating">Evaluating</option>
+                  <option value="creating">Creating</option>
+                </select>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Marks</label>
+                <div class="input-group input-group-sm" style="max-width: 160px;">
+                  <input
+                    type="number"
+                    min="0"
+                    class="form-control form-control-sm"
+                    v-model.number="it.marks"
+                  />
+                  <span class="input-group-text">pts</span>
                 </div>
               </div>
-          
+              <div class="col-md-5">
+                <label class="form-label">Explanation (optional)</label>
+                <textarea class="form-control form-control-sm" rows="2" v-model="it.explanation"></textarea>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -268,8 +287,13 @@ export default {
           correct_answer: '',
           explanation: '',
           difficulty_level: 'remembering',
+          marks: 1,
           useTextarea: false,
           is_math: false,
+          optionImages: [],
+          optionImagePreviews: [],
+          questionImage: null,
+          questionImagePreview: '',
           matching_items: { left: ['', ''], right: ['', ''] },
           matching_pairs: [{ left_index: null, right_index: null }],
         });
@@ -299,7 +323,12 @@ export default {
       fd.append('question_type', it.question_type);
       fd.append('question', it.question || '');
       if (it.question_type === 'mcq') {
-        (it.options || []).forEach((opt, i) => fd.append(`options[${i}]`, opt));
+        (it.options || []).forEach((opt, i) => {
+          fd.append(`options[${i}]`, opt);
+          if (it.optionImages && it.optionImages[i]) {
+            fd.append(`option_images[${i}]`, it.optionImages[i]);
+          }
+        });
       } else if (it.question_type === 'matching') {
         fd.append('options', JSON.stringify(it.matching_items || { left: [], right: [] }));
       } else {
@@ -334,6 +363,46 @@ export default {
     removeQuestionImage(it) {
       it.questionImage = null;
       it.questionImagePreview = '';
+    },
+    onOptionImageChange(it, oidx, e) {
+      const file = e?.target?.files?.[0];
+      if (!it.optionImages) it.optionImages = [];
+      if (!it.optionImagePreviews) it.optionImagePreviews = [];
+      if (this.$set) {
+        this.$set(it.optionImages, oidx, file || null);
+      } else {
+        it.optionImages[oidx] = file || null;
+      }
+      const existingUrl = it.optionImagePreviews[oidx];
+      if (existingUrl && typeof URL !== 'undefined') {
+        try { URL.revokeObjectURL(existingUrl); } catch {}
+      }
+      const nextUrl = file ? URL.createObjectURL(file) : '';
+      if (this.$set) {
+        this.$set(it.optionImagePreviews, oidx, nextUrl);
+      } else {
+        it.optionImagePreviews[oidx] = nextUrl;
+      }
+    },
+    clearOptionImage(it, oidx) {
+      if (it.optionImages && it.optionImages.length > oidx) {
+        if (this.$set) {
+          this.$set(it.optionImages, oidx, null);
+        } else {
+          it.optionImages[oidx] = null;
+        }
+      }
+      if (it.optionImagePreviews && it.optionImagePreviews.length > oidx) {
+        const url = it.optionImagePreviews[oidx];
+        if (url && typeof URL !== 'undefined') {
+          try { URL.revokeObjectURL(url); } catch {}
+        }
+        if (this.$set) {
+          this.$set(it.optionImagePreviews, oidx, '');
+        } else {
+          it.optionImagePreviews[oidx] = '';
+        }
+      }
     },
     // Math insertion helpers
     insertRowMathAtCursor(it, target, mode = 'inline') {
@@ -461,6 +530,12 @@ export default {
       for (const it of this.items) {
         if (!it.question) { this.error = 'Each question must have text.'; return; }
         if (it.question_type === 'mcq') {
+          // Normalize MCQ options (ensure non-empty labels for image-only options)
+          it.options = (it.options || []).map((opt, idx) => {
+            const val = (opt || '').toString().trim();
+            if (val !== '') return val;
+            return `Option ${String.fromCharCode(65 + idx)}`;
+          });
           if (!Array.isArray(it.options) || it.options.length < 2) { this.error = 'MCQ needs at least two options.'; return; }
           if (!it.options.includes(it.correct_answer)) { this.error = 'MCQ correct answer must match one option.'; return; }
         } else if (it.question_type === 'true_false') {

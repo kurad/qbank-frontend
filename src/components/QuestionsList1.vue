@@ -95,8 +95,21 @@
           </div>
           <div class="mb-2">
             <!-- Display question text, math, or KaTeX -->
-            <span v-if="q.is_math && (q.katex_content || (q.metadata && q.metadata.katex_content))" class="fw-semibold" v-html="renderKaTeX(q.katex_content || (q.metadata && q.metadata.katex_content))"></span>
-            <span v-else class="fw-semibold" v-html="renderMarkdown(q.question)"></span>
+            <span
+              v-if="q.is_math && (q.katex_content || (q.metadata && q.metadata.katex_content))"
+              class="fw-semibold"
+              v-html="renderKaTeX(q.katex_content || (q.metadata && q.metadata.katex_content))"
+            ></span>
+            <span
+              v-else-if="q.is_math"
+              class="fw-semibold"
+              v-html="renderMath(q.question, true)"
+            ></span>
+            <span
+              v-else
+              class="fw-semibold"
+              v-html="renderMarkdown(q.question)"
+            ></span>
             <img v-if="q.question_image_url" :src="q.question_image_url" alt="Question Image" class="img-thumbnail ms-2" style="max-width:180px;max-height:120px;object-fit:contain;" />
           </div>
           <div>
@@ -104,7 +117,7 @@
             <template v-if="q.question_type === 'mcq' && Array.isArray(q.options)">
               <div v-for="(opt, oidx) in q.options" :key="oidx" class="form-check" :class="{'bg-success-subtle': isCorrectOption(q.correct_answer, getOptionValue(opt))}">
                 <input class="form-check-input" type="checkbox" :checked="isCorrectOption(q.correct_answer, getOptionValue(opt))" disabled />
-                <label v-if="q.is_math" class="form-check-label" v-html="renderMarkdown(getOptionValue(opt))"></label>
+                <label v-if="q.is_math" class="form-check-label" v-html="renderMath(getOptionValue(opt), true)"></label>
                 <label v-else class="form-check-label">{{ getOptionValue(opt) }}</label>
               </div>
             </template>
@@ -121,13 +134,17 @@
             </template>
             <!-- Short Answer -->
             <template v-else-if="q.question_type === 'short_answer'">
-              <div class="form-text">Short Answer: <strong v-if="q.is_math" v-html="renderMarkdown(q.correct_answer)"></strong><strong v-else>{{ q.correct_answer }}</strong></div>
+              <div class="form-text">
+                Short Answer:
+                <strong v-if="q.is_math" v-html="renderMath(q.correct_answer, true)"></strong>
+                <strong v-else>{{ q.correct_answer }}</strong>
+              </div>
             </template>
             <!-- Other options -->
             <template v-else-if="Array.isArray(q.options)">
               <div v-for="(opt, oidx) in q.options" :key="oidx" class="form-check" :class="{'bg-success-subtle': isCorrectOption(q.correct_answer, getOptionValue(opt))}">
                 <input class="form-check-input" type="checkbox" :checked="isCorrectOption(q.correct_answer, getOptionValue(opt))" disabled />
-                <label v-if="q.is_math" class="form-check-label" v-html="renderMarkdown(getOptionValue(opt))"></label>
+                <label v-if="q.is_math" class="form-check-label" v-html="renderMath(getOptionValue(opt), true)"></label>
                 <label v-else class="form-check-label">{{ getOptionValue(opt) }}</label>
               </div>
             </template>
@@ -464,6 +481,40 @@ export default {
       // If no delimiters were found, try to render the whole string.
       // This handles the case for the options which are pure LaTeX.
       return safeRender(processedContent, { displayMode: false });
+    },
+
+    // Render math or plain text, similar to PracticeSession.vue
+    renderMath(text, isMath = false) {
+      if (!text) return '';
+      let processed = String(text);
+
+      // Handle explicit LaTeX delimiters if present
+      const hasBlock = /\$\$([^$]+)\$\$/g.test(processed);
+      const hasInline = /\$(.+?)\$/g.test(processed);
+
+      if (hasBlock || hasInline) {
+        processed = processed.replace(/\$\$([^$]+)\$\$/g, (_, math) => {
+          return katex.renderToString(math, { displayMode: true, throwOnError: false });
+        });
+
+        processed = processed.replace(/\$(.+?)\$/g, (_, math) => {
+          return katex.renderToString(math, { displayMode: false, throwOnError: false });
+        });
+
+        return processed;
+      }
+
+      // If no $ delimiters but the value is marked as math, render whole string as inline math
+      if (isMath) {
+        try {
+          return katex.renderToString(processed, { displayMode: false, throwOnError: false });
+        } catch (e) {
+          return processed;
+        }
+      }
+
+      // Not math: return as plain text
+      return processed;
     },
     
     isCorrectOption(correct, opt) {
