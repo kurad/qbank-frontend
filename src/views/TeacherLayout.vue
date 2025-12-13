@@ -31,7 +31,7 @@
           
           
           <li class="nav-item">
-            <router-link :to="{name: 'create-assessment'}" class="nav-link fw-semibold rounded-pill px-3 py-2">Assessments</router-link>
+            <router-link :to="{name: 'create-assessment'}" class="nav-link fw-semibold rounded-pill px-3 py-2">Test Builder</router-link>
           </li>
           <!-- <li class="nav-item">
             <a href="#" class="nav-link fw-semibold rounded-pill px-3 py-2">Settings</a>

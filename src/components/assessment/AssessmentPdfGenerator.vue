@@ -116,7 +116,7 @@ export default {
   pdfContent.style.fontFamily = "'Segoe UI', 'Roboto', Arial, sans-serif, serif";
   pdfContent.style.color = "#222";
   pdfContent.style.fontSize = "12pt";
-  pdfContent.style.lineHeight = "1.6";
+  pdfContent.style.lineHeight = "1.5";
 
   // Card container
   const card = document.createElement("div");
@@ -172,7 +172,7 @@ export default {
   header.style.background = "#e0e7ef"; // lighter for ink saving
   header.style.color = "#222";
   header.style.borderRadius = "14px 14px 0 0";
-  header.style.padding = "28px 24px 18px 24px";
+  header.style.padding = "20px 20px 12px 20px";
   header.style.textAlign = "center";
   header.style.marginBottom = "24px";
   header.style.position = "relative";
@@ -237,7 +237,6 @@ export default {
 
         infoBox.appendChild(line("Student Name"));
         infoBox.appendChild(line("Class/Grade"));
-        infoBox.appendChild(line("Date"));
         card.appendChild(infoBox);
       }
 
@@ -251,19 +250,25 @@ export default {
       mainContent.style.overflowWrap = "break-word";
       mainContent.style.hyphens = "none";
 
-      // Total marks
-      const totalMarks = qs.reduce(
-        (sum, q) => sum + (parseFloat(q.marks || 0) || 0),
-        0
-      );
+      // Total marks (for parent questions, use sum of sub-question marks)
+      const totalMarks = qs.reduce((sum, q) => {
+        if (Array.isArray(q.sub_questions) && q.sub_questions.length) {
+          const subTotal = q.sub_questions.reduce(
+            (s, sub) => s + (parseFloat(sub.marks || 0) || 0),
+            0
+          );
+          return sum + subTotal;
+        }
+        return sum + (parseFloat(q.marks || 0) || 0);
+      }, 0);
 
       // Instructions box
       const instructions = document.createElement("div");
       instructions.style.background = "#f3f4f6";
       instructions.style.borderLeft = "6px solid #374151";
       instructions.style.borderRadius = "6px";
-      instructions.style.padding = "12px 16px";
-      instructions.style.margin = "0 0 16px 0";
+      instructions.style.padding = "8px 12px";
+      instructions.style.margin = "0 0 10px 0";
       instructions.style.pageBreakInside = "avoid";
       instructions.style.breakInside = "avoid";
 
@@ -278,7 +283,6 @@ export default {
       ulInst.style.paddingLeft = "20px";
 
       const bullets = [
-        "Write your name and class/grade in the spaces provided above.",
         "Answer all questions in the spaces provided.",
         "For multiple choice questions, circle or tick the correct answer.",
         "Show all working where necessary.",
@@ -296,7 +300,7 @@ export default {
       // Questions
       qs.forEach((q, idx) => {
         const questionDiv = document.createElement("div");
-        questionDiv.style.marginBottom = "20px";
+        questionDiv.style.marginBottom = "14px";
         questionDiv.style.pageBreakInside = "avoid";
         questionDiv.style.breakInside = "avoid";
         questionDiv.style.pageBreakBefore = "auto";
@@ -304,7 +308,7 @@ export default {
         questionDiv.style.hyphens = "none";
         questionDiv.classList.add("avoid-page-break");
 
-        // Header with marks
+        // Header with marks (for parent questions, use sum of sub-question marks)
         const qHeader = document.createElement("h2");
         qHeader.style.fontSize = "1.1rem";
         qHeader.style.marginBottom = "10px";
@@ -313,17 +317,25 @@ export default {
         qHeader.style.pageBreakInside = "avoid";
         qHeader.style.breakInside = "avoid";
         qHeader.style.color = "#4f46e5";
+
+        let headerMarks = parseFloat(q.marks || 0) || 0;
+        if (Array.isArray(q.sub_questions) && q.sub_questions.length) {
+          headerMarks = q.sub_questions.reduce(
+            (sum, sub) => sum + (parseFloat(sub.marks || 0) || 0),
+            0
+          );
+        }
         qHeader.innerHTML = `Question ${
           idx + 1
-        } <span style=\"color: #fbbf24; float: right; font-weight: normal;\">[marks: ${
-          q.marks || 0
+        } <span style=\"color: #000000; float: right; font-weight: 700;\">[marks: ${
+          headerMarks
         }]<\/span>`;
         questionDiv.appendChild(qHeader);
 
         // Question text
         const qText = document.createElement("div");
         qText.style.marginBottom = "10px";
-        qText.style.fontSize = "1.05rem";
+        qText.style.fontSize = "0.95rem";
         qText.style.pageBreakInside = "avoid";
         qText.style.breakInside = "avoid";
         // Avoid breaking words across pages; allow breaking long URLs/words if needed
@@ -340,6 +352,7 @@ export default {
         if (q.question_image) {
           const img = document.createElement("img");
           img.src = this.storageUrl(q.question_image);
+          img.crossOrigin = "anonymous";
           img.style.maxWidth = "500px";
           img.style.maxHeight = "300px";
           img.style.display = "block";
@@ -351,52 +364,173 @@ export default {
           questionDiv.appendChild(img);
         }
 
+        // Sub-questions (for parent/container questions)
+        if (Array.isArray(q.sub_questions) && q.sub_questions.length) {
+          const subWrap = document.createElement("div");
+          subWrap.style.margin = "4px 0 0 10px";
+          subWrap.style.paddingLeft = "8px";
+          subWrap.style.borderLeft = "3px solid #e5e7eb";
+          subWrap.style.pageBreakInside = "avoid";
+          subWrap.style.breakInside = "avoid";
+
+          // const title = document.createElement("div");
+          // title.textContent = "Sub-questions:";
+          // title.style.fontWeight = "600";
+          // title.style.marginBottom = "4px";
+          // title.style.color = "#374151";
+          // subWrap.appendChild(title);
+
+          const list = document.createElement("ol");
+          list.style.margin = "0 0 4px 12px";
+          list.style.padding = "0";
+          q.sub_questions.forEach((sub, sIdx) => {
+            const li = document.createElement("li");
+            li.style.marginBottom = "3px";
+            li.style.pageBreakInside = "avoid";
+            li.style.breakInside = "avoid";
+
+            const textDiv = document.createElement("div");
+            const subText = sub.is_math
+              ? this.renderSmartMath(sub.question, { allowBlock: true })
+              : this.escapeHtml(sub.question || "");
+            const subMarks = parseFloat(sub.marks || 0) || 0;
+            const marksSpan = `<span style=\"font-size:0.9rem; color:#6b7280; margin-left:6px;\">[Marks: ${subMarks}]<\/span>`;
+            textDiv.innerHTML = `${subText} ${marksSpan}`;
+            li.appendChild(textDiv);
+
+            const subType = String(sub.question_type || "").toLowerCase();
+            if (subType === "short_answer") {
+              if (isTeacher) {
+                // Teacher PDF: show answer if available, otherwise note and small space
+                const ansWrap = document.createElement("div");
+                ansWrap.style.marginTop = "4px";
+                ansWrap.style.pageBreakInside = "avoid";
+                ansWrap.style.breakInside = "avoid";
+
+                const hasAnswer =
+                  sub.correct_answer != null && String(sub.correct_answer).trim() !== "";
+                if (hasAnswer) {
+                  const title = document.createElement("span");
+                  title.style.fontWeight = "bold";
+                  title.style.color = "#4f46e5";
+                  title.textContent = "Answer: ";
+                  ansWrap.appendChild(title);
+
+                  const ansText = document.createElement("span");
+                  const txt = String(sub.correct_answer);
+                  ansText.innerHTML = sub.is_math
+                    ? this.renderSmartMath(txt, { allowBlock: true })
+                    : this.escapeHtml(txt);
+                  ansWrap.appendChild(ansText);
+                } else {
+                  const note = document.createElement("div");
+                  note.style.fontStyle = "italic";
+                  note.style.color = "#6b7280";
+                  note.textContent = "No answer was provided.";
+                  ansWrap.appendChild(note);
+
+                  const lines = document.createElement("div");
+                  lines.style.margin = "4px 4px 0 0";
+                  lines.style.pageBreakInside = "avoid";
+                  lines.style.breakInside = "avoid";
+                  for (let i = 0; i < 2; i++) {
+                    const line = document.createElement("div");
+                    line.style.borderBottom = "1px solid #333";
+                    line.style.height = "16px";
+                    line.style.marginBottom = "4px";
+                    line.style.pageBreakInside = "avoid";
+                    line.style.breakInside = "avoid";
+                    lines.appendChild(line);
+                  }
+                  ansWrap.appendChild(lines);
+                }
+
+                li.appendChild(ansWrap);
+              } else {
+                // Student PDF: leave writing space only
+                const lines = document.createElement("div");
+                lines.style.margin = "6px 4px 0 0";
+                lines.style.pageBreakInside = "avoid";
+                lines.style.breakInside = "avoid";
+                for (let i = 0; i < 3; i++) {
+                  const line = document.createElement("div");
+                  line.style.borderBottom = "1px solid #333";
+                  line.style.height = "18px";
+                  line.style.marginBottom = "6px";
+                  line.style.pageBreakInside = "avoid";
+                  line.style.breakInside = "avoid";
+                  lines.appendChild(line);
+                }
+                li.appendChild(lines);
+              }
+            }
+
+            list.appendChild(li);
+          });
+          subWrap.appendChild(list);
+          questionDiv.appendChild(subWrap);
+        }
+
         // Options / Types
         const qType = String(q.question_type).toLowerCase();
         if (qType === "matching") {
-          // Render matching left/right columns
-          const container = document.createElement("div");
-          container.style.display = "flex";
-          container.style.flexWrap = "wrap";
-          container.style.gap = "24px";
-          container.style.marginLeft = "10px";
-          container.style.pageBreakInside = "avoid";
-          container.style.breakInside = "avoid";
+          // Render matching options in a two-column table for better visibility
+          const leftArr = (q.matching_items && q.matching_items.left) || [];
+          const rightArr = (q.matching_items && q.matching_items.right) || [];
+          const maxLen = Math.max(leftArr.length, rightArr.length);
 
-          const col = (title, items) => {
-            const wrap = document.createElement("div");
-            wrap.style.flex = "1";
-            wrap.style.pageBreakInside = "avoid";
-            wrap.style.breakInside = "avoid";
-            const h = document.createElement("div");
-            h.style.fontWeight = "bold";
-            h.style.marginBottom = "6px";
-            h.style.color = "#4f46e5";
-            h.textContent = title;
-            wrap.appendChild(h);
+          const table = document.createElement("table");
+          table.style.width = "100%";
+          table.style.borderCollapse = "collapse";
+          table.style.marginTop = "6px";
+          table.style.marginLeft = "10px";
+          table.style.pageBreakInside = "avoid";
+          table.style.breakInside = "avoid";
 
-            const ul = document.createElement("ul");
-            ul.style.margin = "0";
-            ul.style.paddingLeft = "18px";
-            ul.style.pageBreakInside = "avoid";
-            ul.style.breakInside = "avoid";
-            (items || []).forEach((txt, i) => {
-              const li = document.createElement("li");
-              li.style.marginBottom = "4px";
-              li.style.pageBreakInside = "avoid";
-              li.style.breakInside = "avoid";
-              li.innerHTML = q.is_math
-                ? this.renderSmartMath(txt ?? `Item ${i + 1}`, { allowBlock: false })
-                : this.escapeHtml(txt ?? `Item ${i + 1}`);
-              ul.appendChild(li);
-            });
-            wrap.appendChild(ul);
-            return wrap;
-          };
+          const thead = document.createElement("thead");
+          const headRow = document.createElement("tr");
+          ["Left", "Right"].forEach((label) => {
+            const th = document.createElement("th");
+            th.textContent = label;
+            th.style.borderBottom = "1px solid #e5e7eb";
+            th.style.padding = "4px 6px";
+            th.style.textAlign = "left";
+            th.style.color = "#4f46e5";
+            th.style.fontWeight = "600";
+            headRow.appendChild(th);
+          });
+          thead.appendChild(headRow);
+          table.appendChild(thead);
 
-          container.appendChild(col("Left", q.matching_items?.left || []));
-          container.appendChild(col("Right", q.matching_items?.right || []));
-          questionDiv.appendChild(container);
+          const tbody = document.createElement("tbody");
+          for (let i = 0; i < maxLen; i++) {
+            const row = document.createElement("tr");
+            const leftCell = document.createElement("td");
+            const rightCell = document.createElement("td");
+
+            const leftText = leftArr[i] ?? "";
+            const rightText = rightArr[i] ?? "";
+
+            leftCell.style.padding = "3px 6px";
+            rightCell.style.padding = "3px 6px";
+            leftCell.style.borderBottom = "1px solid #f3f4f6";
+            rightCell.style.borderBottom = "1px solid #f3f4f6";
+
+            leftCell.innerHTML = q.is_math
+              ? this.renderSmartMath(leftText || `Item ${i + 1}`, { allowBlock: false })
+              : this.escapeHtml(leftText || `Item ${i + 1}`);
+
+            rightCell.innerHTML = q.is_math
+              ? this.renderSmartMath(rightText || `Item ${i + 1}`, { allowBlock: false })
+              : this.escapeHtml(rightText || `Item ${i + 1}`);
+
+            row.appendChild(leftCell);
+            row.appendChild(rightCell);
+            tbody.appendChild(row);
+          }
+
+          table.appendChild(tbody);
+          questionDiv.appendChild(table);
 
           if (
             isTeacher && Array.isArray(q.matching_pairs) && q.matching_pairs.length
@@ -491,7 +625,7 @@ export default {
             optDiv.style.wordBreak = "normal";
             optDiv.style.overflowWrap = "break-word";
             optDiv.style.hyphens = "none";
-            optDiv.innerHTML = `<strong style=\"color:#4f46e5\">${String.fromCharCode(65 + idx)}.</strong> ${label.charAt(0).toUpperCase() + label.slice(1)} ${
+            optDiv.innerHTML = `${String.fromCharCode(65 + idx)}. ${label.charAt(0).toUpperCase() + label.slice(1)} ${
               isTeacher && isCorrect ? '<span style=\"color:green; font-weight: bold;\">(✔)</span>' : ""
             }`;
             optsWrap.appendChild(optDiv);
@@ -528,7 +662,7 @@ export default {
               : "";
 
             // Base text content
-            optDiv.innerHTML = `<strong style=\"color:#4f46e5\">${String.fromCharCode(65 + oidx)}.</strong> ${textHtml} ${correctMark}`;
+            optDiv.innerHTML = `${String.fromCharCode(65 + oidx)}. ${textHtml} ${correctMark}`;
 
             // Optional option image
             if (opt.option_image) {
@@ -598,7 +732,7 @@ export default {
           for (let i = 1; i <= pageCount; i++) {
             pdf.setPage(i);
             // Place footer within bottom margin area to avoid overlapping content
-            pdf.text(footerText, 105, 285, { align: 'center' });
+            pdf.text(footerText, 105, 280, { align: 'center' });
           }
         })
         .save();

@@ -183,18 +183,46 @@ const router = createRouter({
 });
 
 router.beforeEach(async (to, from, next) => {
-  if (to.matched.some((record) => record.meta.requiresAuth)) {
-    const authStatus = await checkAuth();
-    if (!authStatus.isAuthenticated) {
-      next({ name: "login" });
-    } else if (to.meta.role && to.meta.role !== authStatus.role) {
-      next({ name: "login" });
-    } else {
-      next();
-    }
-  } else {
-    next();
+ const requiresAuth = to.matched.some((record) => record.meta.requiresAuth);
+ const requiredRole = to.meta.role;
+ // If route does not require authentication -> allow immediately
+ 
+ if (!requiresAuth) {
+  return next();
+ }
+ // Check authentication from backend (via Sunctum)
+ const auth = await checkAuth();
+ //Not authenticated -> redirect globally to login
+
+ if(!auth.isAuthenticated){
+  return next({
+    name: "login",
+    query: { redirect: to.fullPath }, // Optional: return user to intended page
+  });
+ }
+ // Authenticated but trying to access a different role's area
+ if(requiredRole && requiredRole !== auth.role) {
+  // Redirect based on actual role
+  if(auth.role === "student"){
+    return next({
+      name: "studentDashboard",
+    });
+  }else if(auth.role === "teacher"){
+    return next({
+      name: "teacherDashboard",
+    });
+  }else if(auth.role === "admin"){
+    return next({
+      name: "AdminDashboard",
+    });
   }
+  // Fallback
+  return next({
+    name: "login",
+  });
+ }
+ // Authenticated and trying to access correct role's area
+ return next();
 });
 
 export default router;

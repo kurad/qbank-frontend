@@ -7,6 +7,37 @@
       <small class="text-white-50" v-if="sectionsLoading">Loading sections...</small>
     </div>
     <div class="card-body">
+      <!-- Assessment Instructions -->
+      <div class="mb-3">
+        <h6 class="mb-2">Assessment Instructions</h6>
+        <textarea
+          v-model="instructions"
+          class="form-control form-control-sm"
+          rows="3"
+          placeholder="Add instructions for this assessment (shown to students before they start)"
+        ></textarea>
+        <div class="d-flex justify-content-between align-items-center mt-2">
+          <small class="text-muted">
+            These instructions apply to the whole assessment.
+          </small>
+          <button
+            type="button"
+            class="btn btn-sm btn-primary"
+            :disabled="savingInstructions || !assessment?.id"
+            @click="saveInstructions"
+          >
+            <span
+              v-if="savingInstructions"
+              class="spinner-border spinner-border-sm me-1"
+            ></span>
+            <span>{{ savingInstructions ? 'Saving...' : 'Save Instructions' }}</span>
+          </button>
+        </div>
+        <div v-if="instructionsError" class="alert alert-danger mt-2 py-1 px-2 small">
+          {{ instructionsError }}
+        </div>
+      </div>
+
       <div class="row">
         <div class="col-md-5 mb-3">
           <h6 class="mb-2 d-flex justify-content-between align-items-center">
@@ -52,6 +83,13 @@
               >
                 <i class="bi bi-pencil"></i>
               </button>
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-danger"
+                @click.stop="deleteSection(s)"
+              >
+                <i class="bi bi-trash"></i>
+              </button>
               </div>
             </li>
           </ul>
@@ -74,7 +112,7 @@
 
               <!-- Questions currently in this section -->
               <div
-                v-if="!activeSection.questions || !activeSection.questions.length"
+                v-if="!sectionQuestionsDetailed || !sectionQuestionsDetailed.length"
                 class="text-muted small mb-2"
               >
                 No questions added to this section yet.
@@ -85,7 +123,7 @@
                 style="max-height: 260px; overflow-y: auto;"
               >
                 <div
-                  v-for="(q, idx) in activeSection.questions || []"
+                  v-for="(q, idx) in sectionQuestionsDetailed || []"
                   :key="q.id || idx"
                   class="form-check small mb-2"
                 >
@@ -103,6 +141,35 @@
                   >
                     <strong>#{{ idx + 1 }}</strong>
                     <span v-html="q.question"></span>
+                    <span
+                      v-if="getQuestionMarks(q) > 0"
+                      class="badge bg-light text-secondary ms-1 align-middle"
+                    >
+                      Marks: {{ getQuestionMarks(q) }}
+                    </span>
+                    <!-- Parent question: show sub-questions summary if present -->
+                    <div
+                      v-if="q.question_type === 'parent' && Array.isArray(q.sub_questions) && q.sub_questions.length"
+                      class="mt-1 ps-2 border-start"
+                    >
+                      <ol class="mb-1 ps-3 small">
+                        <li
+                          v-for="(sub, sIdx) in q.sub_questions"
+                          :key="sub.id || sIdx"
+                          class="mb-1"
+                        >
+                          <div>
+                            <span v-html="sub.question"></span>
+                          </div>
+                          <small class="text-muted">
+                            Type: {{ sub.question_type }}
+                            <span v-if="sub.marks != null && sub.marks !== ''">
+                              | Points: {{ sub.marks }}
+                            </span>
+                          </small>
+                        </li>
+                      </ol>
+                    </div>
                     <span
                       v-if="isQuestionAssignedElsewhere(q.id)"
                       class="text-muted ms-1"
@@ -207,6 +274,9 @@
                   }}
                 </span>
               </button>
+              <div class="mt-2 small text-muted">
+                Total marks in this section: <strong>{{ selectedSectionMarks }}</strong>
+              </div>
 
               <!-- Available questions to add -->
               <hr class="my-3" />
@@ -239,6 +309,35 @@
                     :for="'avail-secq-' + (q.id || idx)"
                   >
                     <span v-html="q.question"></span>
+                    <span
+                      v-if="getQuestionMarks(q) > 0"
+                      class="badge bg-light text-secondary ms-1 align-middle"
+                    >
+                      Marks: {{ getQuestionMarks(q) }}
+                    </span>
+                    <!-- Parent question: show sub-questions summary if present -->
+                    <div
+                      v-if="q.question_type === 'parent' && Array.isArray(q.sub_questions) && q.sub_questions.length"
+                      class="mt-1 ps-2 border-start"
+                    >
+                      <ol class="mb-1 ps-3 small">
+                        <li
+                          v-for="(sub, sIdx) in q.sub_questions"
+                          :key="sub.id || sIdx"
+                          class="mb-1"
+                        >
+                          <div>
+                            <span v-html="sub.question"></span>
+                          </div>
+                          <small class="text-muted">
+                            Type: {{ sub.question_type }}
+                            <span v-if="sub.marks != null && sub.marks !== ''">
+                              | Points: {{ sub.marks }}
+                            </span>
+                          </small>
+                        </li>
+                      </ol>
+                    </div>
                     <div class="mt-1 ms-3">
                       <!-- MCQ -->
                       <div
@@ -427,6 +526,9 @@ export default {
         title: "",
         instruction: "",
       },
+      instructions: (this.assessment && this.assessment.instructions) || "",
+      savingInstructions: false,
+      instructionsError: "",
     };
   },
   computed: {
@@ -446,22 +548,62 @@ export default {
       return ids;
     },
     availableQuestions() {
-      // Questions from the assessment that are not yet in this section
-      // and not already assigned to another section
-      const inCurrentSection = new Set(
-        (this.activeSection?.questions || [])
-          .filter((q) => q && q.id)
-          .map((q) => q.id)
+      const selectedIds = new Set(
+        Array.isArray(this.sectionQuestionSelection)
+          ? this.sectionQuestionSelection
+          : []
       );
 
       return this.localQuestions
         .map((item) => item.question)
         .filter((q) => {
           if (!q || !q.id) return false;
-          if (inCurrentSection.has(q.id)) return false;
+          if (selectedIds.has(q.id)) return false;
           if (this.assignedElsewhereIds.has(q.id)) return false;
           return true;
         });
+    },
+    sectionQuestionsDetailed() {
+      const section = this.activeSection;
+      if (!section || !Array.isArray(section.questions)) return [];
+
+      const questionMap = new Map(
+        this.localQuestions
+          .map((item) => item && item.question)
+          .filter((q) => q && q.id)
+          .map((q) => [q.id, q])
+      );
+
+      return section.questions
+        .filter((sq) => sq && sq.id)
+        .map((sq) => {
+          const full = questionMap.get(sq.id);
+          return full || sq;
+        });
+    },
+    selectedSectionMarks() {
+      if (
+        !Array.isArray(this.sectionQuestionSelection) ||
+        !this.sectionQuestionSelection.length
+      ) {
+        return 0;
+      }
+      const selectedIds = new Set(this.sectionQuestionSelection);
+
+      return this.localQuestions
+        .map((item) => item && item.question)
+        .filter((q) => q && q.id && selectedIds.has(q.id))
+        .reduce((sum, q) => sum + this.getQuestionMarks(q), 0);
+    },
+  },
+  watch: {
+    "assessment.id"(newVal, oldVal) {
+      if (newVal && newVal !== oldVal) {
+        this.loadSections();
+      }
+    },
+    "assessment.instructions"(val) {
+      this.instructions = val || "";
     },
   },
   mounted() {
@@ -472,6 +614,47 @@ export default {
     getOptionValue,
     isCorrectOption,
     getMatchingItems,
+    getQuestionMarks(q) {
+      if (!q) return 0;
+      try {
+        if (Array.isArray(q.sub_questions) && q.sub_questions.length) {
+          return q.sub_questions.reduce((sum, sub) => {
+            const m = parseFloat(sub && sub.marks != null ? sub.marks : 0);
+            return sum + (isNaN(m) ? 0 : m);
+          }, 0);
+        }
+        const m = parseFloat(q.marks != null ? q.marks : 0);
+        return isNaN(m) ? 0 : m;
+      } catch (_) {
+        return 0;
+      }
+    },
+    async deleteSection(section) {
+      if (!section || !section.id) return;
+      const yes = window.confirm(
+        `Are you sure you want to delete section "${section.title || ""}"?`
+      );
+      if (!yes) return;
+
+      try {
+        await axios.delete(`/assessment-sections/${section.id}`);
+
+        this.sections = this.sections.filter((s) => s.id !== section.id);
+
+        if (this.activeSectionId === section.id) {
+          this.activeSectionId = this.sections.length
+            ? this.sections[0].id
+            : null;
+        }
+
+        this.syncSectionSelection();
+      } catch (err) {
+        console.error("Failed to delete section", err);
+        const msg =
+          err.response?.data?.message || "Failed to delete section.";
+        alert(msg);
+      }
+    },
     async loadSections() {
       if (!this.assessment?.id) return;
       this.sectionsLoading = true;
@@ -503,17 +686,17 @@ export default {
       }
     },
     startCreateSection() {
-  this.editingSectionId = null;
-  this.newSection.title = "";
-  this.newSection.instruction = "";
-  this.openCreateSectionModal();
-},
-    openEditSectionModal(section){
-        if (!section) return;
-    this.editingSectionId = section.id;
-    this.newSection.title = section.title || "";
-    this.newSection.instruction = section.instruction || "";
-    this.openCreateSectionModal(); // reuse modal instance/show logic
+      this.editingSectionId = null;
+      this.newSection.title = "";
+      this.newSection.instruction = "";
+      this.openCreateSectionModal();
+    },
+    openEditSectionModal(section) {
+      if (!section) return;
+      this.editingSectionId = section.id;
+      this.newSection.title = section.title || "";
+      this.newSection.instruction = section.instruction || "";
+      this.openCreateSectionModal(); // reuse modal instance/show logic
     },
     closeCreateSectionModal() {
       if (this.createSectionModal) {
@@ -552,38 +735,36 @@ export default {
       }
     },
     async updateSection() {
-    if (!this.editingSectionId || !this.newSection.title) return;
-    this.creatingSection = true; // reuse same flag
-    try {
-      // Adjust URL/method if your backend is different:
-      const res = await axios.put(
-        `/assessment-sections/${this.editingSectionId}`,
-        {
-          title: this.newSection.title,
-          instruction: this.newSection.instruction || null,
+      if (!this.editingSectionId || !this.newSection.title) return;
+      this.creatingSection = true; // reuse same flag
+      try {
+        const res = await axios.put(
+          `/assessment-sections/${this.editingSectionId}`,
+          {
+            title: this.newSection.title,
+            instruction: this.newSection.instruction || null,
+          }
+        );
+        const updated = res.data;
+
+        const idx = this.sections.findIndex((s) => s.id === updated.id);
+        if (idx !== -1) {
+          this.sections.splice(idx, 1, updated);
         }
-      );
-      const updated = res.data;
 
-      // Update local sections array
-      const idx = this.sections.findIndex(s => s.id === updated.id);
-      if (idx !== -1) {
-        this.sections.splice(idx, 1, updated);
+        this.editingSectionId = null;
+        this.newSection.title = "";
+        this.newSection.instruction = "";
+        this.closeCreateSectionModal();
+      } catch (err) {
+        console.error("Failed to update section", err);
+        const msg =
+          err.response?.data?.message || "Failed to update section.";
+        alert(msg);
+      } finally {
+        this.creatingSection = false;
       }
-
-      this.editingSectionId = null;
-      this.newSection.title = "";
-      this.newSection.instruction = "";
-      this.closeCreateSectionModal();
-    } catch (err) {
-      console.error("Failed to update section", err);
-      const msg =
-        err.response?.data?.message || "Failed to update section.";
-      alert(msg);
-    } finally {
-      this.creatingSection = false;
-    }
-  },
+    },
     syncSectionSelection() {
       const section = this.activeSection;
       if (!section || !Array.isArray(section.questions)) {
@@ -616,8 +797,6 @@ export default {
         if (Array.isArray(payload.warnings)) {
           this.sectionWarnings = payload.warnings;
         }
-        // Reload sections to ensure we have fresh questions data for the
-        // active section and to keep the availableQuestions list in sync.
         await this.loadSections();
       } catch (err) {
         console.error("Failed to save section questions", err);
@@ -632,6 +811,29 @@ export default {
     isQuestionAssignedElsewhere(questionId) {
       if (!questionId) return false;
       return this.assignedElsewhereIds.has(questionId);
+    },
+    async saveInstructions() {
+      if (!this.assessment?.id) return;
+      this.instructionsError = "";
+      this.savingInstructions = true;
+      try {
+        const res = await axios.put(
+          `/assessments/${this.assessment.id}/instructions`,
+          {
+            instructions: this.instructions || null,
+          }
+        );
+        const payload = res.data || {};
+        if (payload.assessment) {
+          this.instructions = payload.assessment.instructions || "";
+        }
+      } catch (err) {
+        console.error("Failed to update instructions", err);
+        this.instructionsError =
+          err?.response?.data?.message || "Failed to update instructions.";
+      } finally {
+        this.savingInstructions = false;
+      }
     },
   },
 };

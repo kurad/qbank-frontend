@@ -114,8 +114,8 @@ export default {
       pdfContent.style.fontFamily =
         "'Segoe UI', 'Roboto', Arial, sans-serif, serif";
       pdfContent.style.color = "#222";
-      pdfContent.style.fontSize = "12pt";
-      pdfContent.style.lineHeight = "1.6";
+      pdfContent.style.fontSize = "11pt";
+      pdfContent.style.lineHeight = "1.5";
 
       const card = document.createElement("div");
       card.style.background = "#fff";
@@ -155,7 +155,7 @@ export default {
       header.style.background = "#e0e7ef";
       header.style.color = "#222";
       header.style.borderRadius = "14px 14px 0 0";
-      header.style.padding = "16px 20px 12px 20px";
+      header.style.padding = "20px 20px 12px 20px";
       header.style.textAlign = "center";
       header.style.marginBottom = "12px";
       header.style.position = "relative";
@@ -225,7 +225,6 @@ export default {
 
         infoBox.appendChild(line("Student Name"));
         infoBox.appendChild(line("Class/Grade"));
-        infoBox.appendChild(line("Date"));
         card.appendChild(infoBox);
       }
 
@@ -246,7 +245,7 @@ export default {
       instructions.style.borderLeft = "6px solid #374151";
       instructions.style.borderRadius = "6px";
       instructions.style.padding = "8px 12px";
-      instructions.style.margin = "0 0 8px 0";
+      instructions.style.margin = "0 0 10px 0";
       instructions.style.pageBreakInside = "avoid";
       instructions.style.breakInside = "avoid";
 
@@ -260,7 +259,6 @@ export default {
       ulInst.style.margin = "0";
       ulInst.style.paddingLeft = "20px";
       [
-        "Write your name and class/grade in the spaces provided above.",
         "Answer all questions in the spaces provided.",
         "For multiple choice questions, circle or tick the correct answer.",
         "Show all working where necessary.",
@@ -280,8 +278,6 @@ export default {
         .forEach((sec) => {
           const sectionDiv = document.createElement("div");
           sectionDiv.style.marginBottom = "24px";
-          sectionDiv.style.pageBreakInside = "avoid";
-          sectionDiv.style.breakInside = "avoid";
 
           const secHeader = document.createElement("h2");
           secHeader.style.fontSize = "1.2rem";
@@ -307,10 +303,7 @@ export default {
           const questions = Array.isArray(sec.questions) ? sec.questions : [];
           questions.forEach((q, idx) => {
             const questionDiv = document.createElement("div");
-            questionDiv.style.marginBottom = "18px";
-            questionDiv.style.pageBreakInside = "avoid";
-            questionDiv.style.breakInside = "avoid";
-            questionDiv.classList.add("avoid-page-break");
+            questionDiv.style.marginBottom = "14px";
 
             const qHeader = document.createElement("h3");
             qHeader.style.fontSize = "1.05rem";
@@ -318,14 +311,23 @@ export default {
             qHeader.style.borderBottom = "1px solid #e0e7ef";
             qHeader.style.paddingBottom = "4px";
             qHeader.style.color = "#4f46e5";
-            qHeader.innerHTML = `Question ${idx + 1} <span style=\"color: #fbbf24; float: right; font-weight: normal;\">[marks: ${
-              q.marks || 0
+
+            let headerMarks = parseFloat(q.marks || 0) || 0;
+            if (Array.isArray(q.sub_questions) && q.sub_questions.length) {
+              headerMarks = q.sub_questions.reduce(
+                (sum, sub) => sum + (parseFloat(sub.marks || 0) || 0),
+                0
+              );
+            }
+
+            qHeader.innerHTML = `Question ${idx + 1} <span style=\"color: #000000; float: right; font-weight: 700;\">[marks: ${
+              headerMarks
             }]<\/span>`;
             questionDiv.appendChild(qHeader);
 
             const qText = document.createElement("div");
             qText.style.marginBottom = "10px";
-            qText.style.fontSize = "1.0rem";
+            qText.style.fontSize = "0.95rem";
             qText.style.pageBreakInside = "avoid";
             qText.style.breakInside = "avoid";
             qText.style.wordBreak = "normal";
@@ -340,6 +342,7 @@ export default {
             if (q.question_image) {
               const img = document.createElement("img");
               img.src = this.storageUrl(q.question_image);
+              img.crossOrigin = "anonymous";
               img.style.maxWidth = "500px";
               img.style.maxHeight = "300px";
               img.style.display = "block";
@@ -351,56 +354,172 @@ export default {
               questionDiv.appendChild(img);
             }
 
+            // Sub-questions (for parent/container questions)
+            if (Array.isArray(q.sub_questions) && q.sub_questions.length) {
+              const subWrap = document.createElement("div");
+              subWrap.style.margin = "4px 0 0 10px";
+              subWrap.style.paddingLeft = "8px";
+              subWrap.style.borderLeft = "3px solid #e5e7eb";
+              subWrap.style.pageBreakInside = "avoid";
+              subWrap.style.breakInside = "avoid";
+
+              // const titleSub = document.createElement("div");
+              // titleSub.textContent = "Sub-questions:";
+              // titleSub.style.fontWeight = "600";
+              // titleSub.style.marginBottom = "4px";
+              // titleSub.style.color = "#374151";
+              // subWrap.appendChild(titleSub);
+
+              const listSub = document.createElement("ol");
+              listSub.style.margin = "0 0 4px 12px";
+              listSub.style.padding = "0";
+              q.sub_questions.forEach((sub, sIdx) => {
+                const liSub = document.createElement("li");
+                liSub.style.marginBottom = "3px";
+                liSub.style.pageBreakInside = "avoid";
+                liSub.style.breakInside = "avoid";
+
+                const textDivSub = document.createElement("div");
+                const subText = sub.is_math
+                  ? this.renderSmartMath(sub.question, { allowBlock: true })
+                  : this.escapeHtml(sub.question || "");
+                const subMarks = parseFloat(sub.marks || 0) || 0;
+                const marksSpanSub = `<span style=\"font-size:0.9rem; color:#6b7280; margin-left:6px;\">[Marks: ${subMarks}]<\/span>`;
+                textDivSub.innerHTML = `${subText} ${marksSpanSub}`;
+                liSub.appendChild(textDivSub);
+
+                const subType = String(sub.question_type || "").toLowerCase();
+                if (subType === "short_answer") {
+                  if (isTeacher) {
+                    // Teacher PDF: show answer if available, otherwise note and small space
+                    const ansWrap = document.createElement("div");
+                    ansWrap.style.marginTop = "4px";
+                    ansWrap.style.pageBreakInside = "avoid";
+                    ansWrap.style.breakInside = "avoid";
+
+                    const hasAnswer =
+                      sub.correct_answer != null &&
+                      String(sub.correct_answer).trim() !== "";
+                    if (hasAnswer) {
+                      const titleAns = document.createElement("span");
+                      titleAns.style.fontWeight = "bold";
+                      titleAns.style.color = "#4f46e5";
+                      titleAns.textContent = "Answer: ";
+                      ansWrap.appendChild(titleAns);
+
+                      const ansText = document.createElement("span");
+                      const txtAns = String(sub.correct_answer);
+                      ansText.innerHTML = sub.is_math
+                        ? this.renderSmartMath(txtAns, { allowBlock: true })
+                        : this.escapeHtml(txtAns);
+                      ansWrap.appendChild(ansText);
+                    } else {
+                      const note = document.createElement("div");
+                      note.style.fontStyle = "italic";
+                      note.style.color = "#6b7280";
+                      note.textContent = "No answer was provided.";
+                      ansWrap.appendChild(note);
+
+                      const lines = document.createElement("div");
+                      lines.style.margin = "4px 4px 0 0";
+                      lines.style.pageBreakInside = "avoid";
+                      lines.style.breakInside = "avoid";
+                      for (let i = 0; i < 2; i++) {
+                        const lineDiv = document.createElement("div");
+                        lineDiv.style.borderBottom = "1px solid #333";
+                        lineDiv.style.height = "16px";
+                        lineDiv.style.marginBottom = "4px";
+                        lineDiv.style.pageBreakInside = "avoid";
+                        lineDiv.style.breakInside = "avoid";
+                        lines.appendChild(lineDiv);
+                      }
+                      ansWrap.appendChild(lines);
+                    }
+
+                    liSub.appendChild(ansWrap);
+                  } else {
+                    // Student PDF: leave writing space only
+                    const lines = document.createElement("div");
+                    lines.style.margin = "6px 4px 0 0";
+                    lines.style.pageBreakInside = "avoid";
+                    lines.style.breakInside = "avoid";
+                    for (let i = 0; i < 3; i++) {
+                      const lineDiv = document.createElement("div");
+                      lineDiv.style.borderBottom = "1px solid #333";
+                      lineDiv.style.height = "18px";
+                      lineDiv.style.marginBottom = "6px";
+                      lineDiv.style.pageBreakInside = "avoid";
+                      lineDiv.style.breakInside = "avoid";
+                      lines.appendChild(lineDiv);
+                    }
+                    liSub.appendChild(lines);
+                  }
+                }
+
+                listSub.appendChild(liSub);
+              });
+              subWrap.appendChild(listSub);
+              questionDiv.appendChild(subWrap);
+            }
+
             const qType = String(q.question_type || "").toLowerCase();
             if (qType === "matching") {
-              const container = document.createElement("div");
-              container.style.display = "flex";
-              container.style.flexWrap = "wrap";
-              container.style.gap = "24px";
-              container.style.marginLeft = "10px";
-              container.style.pageBreakInside = "avoid";
-              container.style.breakInside = "avoid";
+              const leftArr = (q.matching_items && q.matching_items.left) || [];
+              const rightArr = (q.matching_items && q.matching_items.right) || [];
+              const maxLen = Math.max(leftArr.length, rightArr.length);
 
-              const col = (titleCol, items) => {
-                const wrap = document.createElement("div");
-                wrap.style.flex = "1";
-                wrap.style.pageBreakInside = "avoid";
-                wrap.style.breakInside = "avoid";
-                const h = document.createElement("div");
-                h.style.fontWeight = "bold";
-                h.style.marginBottom = "6px";
-                h.style.color = "#4f46e5";
-                h.textContent = titleCol;
-                wrap.appendChild(h);
+              const table = document.createElement("table");
+              table.style.width = "100%";
+              table.style.borderCollapse = "collapse";
+              table.style.marginTop = "6px";
+              table.style.marginLeft = "10px";
+              table.style.pageBreakInside = "avoid";
+              table.style.breakInside = "avoid";
 
-                const ul = document.createElement("ul");
-                ul.style.margin = "0";
-                ul.style.paddingLeft = "18px";
-                ul.style.pageBreakInside = "avoid";
-                ul.style.breakInside = "avoid";
-                (items || []).forEach((txt, iTxt) => {
-                  const li = document.createElement("li");
-                  li.style.marginBottom = "4px";
-                  li.style.pageBreakInside = "avoid";
-                  li.style.breakInside = "avoid";
-                  li.innerHTML = q.is_math
-                    ? this.renderSmartMath(txt ?? `Item ${iTxt + 1}`, {
-                        allowBlock: false,
-                      })
-                    : this.escapeHtml(txt ?? `Item ${iTxt + 1}`);
-                  ul.appendChild(li);
-                });
-                wrap.appendChild(ul);
-                return wrap;
-              };
+              const thead = document.createElement("thead");
+              const headRow = document.createElement("tr");
+              ["Left", "Right"].forEach((label) => {
+                const th = document.createElement("th");
+                th.textContent = label;
+                th.style.borderBottom = "1px solid #e5e7eb";
+                th.style.padding = "4px 6px";
+                th.style.textAlign = "left";
+                th.style.color = "#4f46e5";
+                th.style.fontWeight = "600";
+                headRow.appendChild(th);
+              });
+              thead.appendChild(headRow);
+              table.appendChild(thead);
 
-              container.appendChild(
-                col("Left", q.matching_items?.left || [])
-              );
-              container.appendChild(
-                col("Right", q.matching_items?.right || [])
-              );
-              questionDiv.appendChild(container);
+              const tbody = document.createElement("tbody");
+              for (let i = 0; i < maxLen; i++) {
+                const row = document.createElement("tr");
+                const leftCell = document.createElement("td");
+                const rightCell = document.createElement("td");
+
+                const leftText = leftArr[i] ?? "";
+                const rightText = rightArr[i] ?? "";
+
+                leftCell.style.padding = "3px 6px";
+                rightCell.style.padding = "3px 6px";
+                leftCell.style.borderBottom = "1px solid #f3f4f6";
+                rightCell.style.borderBottom = "1px solid #f3f4f6";
+
+                leftCell.innerHTML = q.is_math
+                  ? this.renderSmartMath(leftText || `Item ${i + 1}`, { allowBlock: false })
+                  : this.escapeHtml(leftText || `Item ${i + 1}`);
+
+                rightCell.innerHTML = q.is_math
+                  ? this.renderSmartMath(rightText || `Item ${i + 1}`, { allowBlock: false })
+                  : this.escapeHtml(rightText || `Item ${i + 1}`);
+
+                row.appendChild(leftCell);
+                row.appendChild(rightCell);
+                tbody.appendChild(row);
+              }
+
+              table.appendChild(tbody);
+              questionDiv.appendChild(table);
 
               if (
                 isTeacher &&
@@ -511,17 +630,34 @@ export default {
               });
               questionDiv.appendChild(optsWrap);
             } else {
+              // MCQ and other option-based questions (non-matching/short/true_false)
+              const rawOptions = q.options || [];
+              const texts = rawOptions.map((opt) => opt && opt.option_text
+                ? String(opt.option_text)
+                : "");
+              const longest = texts.length
+                ? Math.max(...texts.map((t) => t.length))
+                : 0;
+              // Heuristic: if the longest option is very long, use a single column
+              const useSingleColumn = longest > 90;
+
               const optsWrap = document.createElement("div");
               optsWrap.style.display = "flex";
               optsWrap.style.flexWrap = "wrap";
-              optsWrap.style.gap = "12px 24px";
+              optsWrap.style.gap = useSingleColumn ? "6px" : "12px 24px";
               optsWrap.style.margin = "6px 0 0 10px";
               optsWrap.style.pageBreakInside = "avoid";
               optsWrap.style.breakInside = "avoid";
-              (q.options || []).forEach((opt, oidx) => {
+
+              rawOptions.forEach((opt, oidx) => {
                 const optDiv = document.createElement("div");
-                optDiv.style.flex = "1 1 45%";
-                optDiv.style.minWidth = "260px";
+                if (useSingleColumn) {
+                  optDiv.style.flex = "1 1 100%";
+                  optDiv.style.minWidth = "100%";
+                } else {
+                  optDiv.style.flex = "1 1 45%";
+                  optDiv.style.minWidth = "260px";
+                }
                 optDiv.style.pageBreakInside = "avoid";
                 optDiv.style.breakInside = "avoid";
                 optDiv.style.margin = "0";
@@ -547,7 +683,7 @@ export default {
                 if (opt.option_image) {
                   const imgOpt = document.createElement("img");
                   imgOpt.src = this.storageUrl(opt.option_image);
-                  imgOpt.style.maxWidth = "260px";
+                  imgOpt.style.maxWidth = useSingleColumn ? "320px" : "260px";
                   imgOpt.style.maxHeight = "140px";
                   imgOpt.style.display = "block";
                   imgOpt.style.marginTop = "6px";
@@ -583,7 +719,7 @@ export default {
           jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
           pagebreak: {
             mode: ["css", "legacy"],
-            avoid: [".avoid-page-break", "img", ".katex"],
+            avoid: [".avoid-page-break"]
           },
         })
         .from(pdfContent)
@@ -609,7 +745,7 @@ export default {
           pdf.setTextColor(180, 180, 180);
           for (let i = 1; i <= pageCount; i++) {
             pdf.setPage(i);
-            pdf.text(footerText, 105, 285, { align: "center" });
+            pdf.text(footerText, 105, 280, { align: "center" });
           }
         })
         .save();

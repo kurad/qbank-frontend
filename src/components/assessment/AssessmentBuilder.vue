@@ -1,52 +1,101 @@
 <template>
-  <div>
+  <div class="assessment-builder-wrapper">
     <!-- Trigger button / could be in a page -->
-    <div class="d-flex align-items-start justify-content-between mb-3">
+    <div class="d-flex align-items-start justify-content-between mb-4">
       <!-- <button class="btn btn-primary me-3" @click="open">Create Assessment</button> -->
       <div class="assessments-overview flex-grow-1">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <h5 class="mb-0">Recent Assessments</h5>
+        <div class="d-flex justify-content-between align-items-center mb-3">
           <div>
-            <button class="btn btn-sm btn-outline-secondary me-2" @click="loadCreatedAssessments" :disabled="loadingAssessments">
-              <i class="bi bi-arrow-clockwise"></i> Refresh
+            <h5 class="mb-1 fw-semibold">Recent Assessments</h5>
+            <p class="text-muted small mb-0">Quickly jump back into your latest quizzes and tests.</p>
+          </div>
+          <div class="d-flex align-items-center">
+            <button
+              class="btn btn-sm btn-outline-secondary me-2 d-inline-flex align-items-center gap-1"
+              @click="loadCreatedAssessments"
+              :disabled="loadingAssessments"
+            >
+              <i :class="['bi', loadingAssessments ? 'bi-arrow-clockwise spin' : 'bi-arrow-clockwise']"></i>
+              <span>Refresh</span>
             </button>
-            <button class="btn btn-sm btn-outline-primary" @click="open">New</button>
+            <button class="btn btn-sm btn-primary d-inline-flex align-items-center gap-1" @click="open">
+              <i class="bi bi-plus-circle"></i>
+              <span>New assessment</span>
+            </button>
           </div>
         </div>
-        <div v-if="loadingAssessments" class="text-muted">Loading...</div>
-        <div v-else-if="assessments.length === 0" class="text-muted small">No assessments created yet</div>
-        <div v-else class="row g-2">
-          <div v-for="a in assessments" :key="a.id" class="col-12 col-sm-6 col-md-4">
-            <div class="card assessment-card h-100">
+
+        <div v-if="loadingAssessments" class="assessment-state py-4">
+          <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+          <span class="text-muted">Loading your recent assessments...</span>
+        </div>
+
+        <div v-else-if="assessments.length === 0" class="assessment-state empty py-4">
+          <div class="empty-icon mb-2">
+            <i class="bi bi-journal-text"></i>
+          </div>
+          <h6 class="mb-1 fw-semibold">No assessments created yet</h6>
+          <p class="text-muted small mb-2">Start by creating your first assessment to see it appear here.</p>
+          <button class="btn btn-sm btn-primary d-inline-flex align-items-center gap-1" @click="open">
+            <i class="bi bi-plus-circle"></i>
+            <span>Create assessment</span>
+          </button>
+        </div>
+
+        <div v-else class="row g-3">
+          <div v-for="a in assessments" :key="a.id" class="col-12 col-sm-6 col-lg-4">
+            <div class="card assessment-card h-100 border-0 shadow-sm">
               <div class="card-body d-flex flex-column">
-                <div class="d-flex justify-content-between align-items-start mb-2">
-                  <div>
-                    <h6 class="card-title mb-1">{{ a.title }}</h6>
-                    <div class="text-muted small">{{ a.subjectName }} · {{ a.gradeName }}</div>
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                  <div class="me-2">
+                    <h6 class="card-title mb-1 text-truncate">{{ a.title }}</h6>
+                    <div class="d-flex flex-wrap align-items-center gap-1 small text-muted">
+                      <span class="badge rounded-pill bg-light text-secondary px-2 py-1">
+                       Subject: {{ a.subjectName || 'Subject' }} 
+                      </span>
+                      <span class="badge rounded-pill bg-light text-secondary px-2 py-1">
+                       Grade: {{ a.gradeName || 'Grade' }}
+                      </span>
+                    </div>
                   </div>
-                  <div class="text-end small text-muted">{{ formatDate(a.created_at) }}</div>
+                  <div class="text-end small text-muted ms-1">
+                    <span class="d-block">{{ formatDate(a.created_at) }}</span>
+                  </div>
                 </div>
 
-                <p class="card-text mb-2 text-truncate">{{ a.summary || '' }}</p>
+                <p class="card-text mb-3 text-truncate text-muted small">
+                  {{ a.summary || 'No description provided for this assessment.' }}
+                </p>
 
                 <div class="mt-auto d-flex justify-content-between align-items-center">
-                  <div class="small text-muted">Questions: <strong>{{ a.question_count ?? a.questions_count ?? (a.questions?.length ?? 0) }}</strong></div>
+                  <div class="small text-muted d-flex align-items-center gap-1">
+                    <i class="bi bi-question-circle"></i>
+                    <span>Questions:</span>
+                    <strong>{{ a.question_count ?? a.questions_count ?? (a.questions?.length ?? 0) }}</strong>
+                  </div>
                   <div>
-                    <router-link :to="{ name: 'assessment-edit', params: {id: a.id}}" class="btn btn-sm btn-success" ><i class="bi bi-pencil"></i> Review & Print</router-link>
+                    <router-link
+                      :to="{ name: 'assessment-edit', params: {id: a.id}}"
+                      class="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1"
+                    >
+                      <i class="bi bi-pencil"></i>
+                      <span>Review &amp; Print</span>
+                    </router-link>
                   </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-  <AssessmentEditor
-    v-if="showEditor"
-    :assessment="editorAssessment"
-    :questions="editorQuestions"
-    :all-questions="allQuestions"
-    :students="students"
-    @close="showEditor = false"
-  />
+
+        <AssessmentEditor
+          v-if="showEditor"
+          :assessment="editorAssessment"
+          :questions="editorQuestions"
+          :all-questions="allQuestions"
+          :students="students"
+          @close="showEditor = false"
+        />
       </div>
     </div>
 
@@ -61,10 +110,15 @@
 
           <div class="modal-body">
             <!-- Step 1 -->
-            <div v-if="step === 1">
+            <div v-if="step === 1" class="wizard-step">
+              <div class="wizard-header mb-3">
+                <h6 class="mb-1 fw-semibold">Step 1 · Assessment details</h6>
+                <p class="text-muted small mb-0">Choose the grade, subject and topics to pull relevant questions.</p>
+              </div>
+
               <div class="mb-3">
                 <label class="form-label">Assessment Title</label>
-                <input v-model="form.title" class="form-control" />
+                <input v-model="form.title" class="form-control" placeholder="e.g. Algebra Quiz - Term 2" />
               </div>
 
               <div class="row">
@@ -136,7 +190,7 @@
                 </div>
               </div>
 
-              <div class="d-flex justify-content-end">
+              <div class="d-flex justify-content-end mt-2">
                 <button class="btn btn-primary" @click="loadQuestions" :disabled="!form.topic_ids.length || loadingQuestions">
                   {{ loadingQuestions ? 'Loading...' : 'Load Questions' }}
                 </button>
@@ -144,19 +198,26 @@
             </div>
 
             <!-- Step 2 -->
-            <div v-if="step === 2">
+            <div v-if="step === 2" class="wizard-step">
+              <div class="wizard-header mb-3 d-flex justify-content-between align-items-center">
+                <div>
+                  <h6 class="mb-1 fw-semibold">Step 2 · Select questions</h6>
+                  <p class="text-muted small mb-0">Review the suggested questions and pick the ones you want to include.</p>
+                </div>
+                <span class="badge bg-light text-secondary">{{ selected.length }} selected</span>
+              </div>
+
               <div class="row">
                 <div class="col-md-7">
-                  <h6>Available Questions</h6>
-                  <div v-if="questions.length === 0" class="text-muted">
-                    No questions for selected topics
+                  <h6 class="mb-2">Available Questions</h6>
+                  <div v-if="questions.length === 0" class="text-muted small mb-3">
+                    No questions for selected topics.
                   </div>
-                 
 
                   <div
                     v-for="q in questions"
                     :key="q.id"
-                    class="border rounded p-3 shadow-sm"
+                    class="border rounded p-3 shadow-sm mb-3 question-card"
                   >
                     <div class="form-check mb-2">
                       <input
@@ -233,7 +294,7 @@
 
                 <div class="col-md-5">
                   <h6>Selected ({{ selected.length }})</h6>
-                  <ul class="list-group mb-3">
+                  <ul class="list-group mb-3 selected-list">
                     <li
                       v-for="id in selected"
                       :key="id"
@@ -295,7 +356,7 @@ export default {
         selected: [],
         saving: false,
         assessments: [],
-        loadingAssessments: false,
+        loadingAssessments: true,
         loadingTopics: false,
         loadingQuestions: false,
         questionsPagination: {
@@ -559,8 +620,6 @@ export default {
       this.loadingAssessments = true;
       try {
         const res = await axios.get('/assessments/created');
-        // DEBUG: log raw response to help trace shapes
-        console.debug('[AssessmentBuilder] /assessments/created response:', res.data);
         // Robust extraction: find the first array payload in common locations
         const extractArray = (payload) => {
           if (!payload) return [];
@@ -587,9 +646,15 @@ export default {
         this.assessments = data.map((a) => ({
           ...a,
           title: a.title || a.name || 'Untitled',
-          subjectName: (a.subject && (a.subject.name || a.subjectName)) || a.subject_name || '',
+          subjectName: (a.subject && (a.subject.name || a.subjectName)) ||
+  a.subject_name ||
+  a.primary_subject || // <- NEW
+  '',
           gradeName:
-            (a.grade_level && (a.grade_level.grade_name || a.grade_level_name)) || a.grade_level_name || '',
+            (a.grade_level && (a.grade_level.grade_name || a.grade_level_name)) ||
+  a.grade_level_name ||
+  a.primary_grade_level || // <- NEW
+  '',
         }));
         console.debug('[AssessmentBuilder] normalized assessments count:', this.assessments.length);
       } catch (err) {
@@ -722,6 +787,81 @@ export default {
 </script>
 
 <style scoped>
+.assessment-builder-wrapper {
+  padding-top: 0.25rem;
+}
+
+.assessments-overview {
+  background: #f8fafc;
+  border-radius: 14px;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid #e5e7eb;
+}
+
+.assessment-state {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.assessment-state.empty {
+  flex-direction: column;
+  text-align: center;
+}
+
+.assessment-state .empty-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e0f2fe;
+  color: #0369a1;
+  font-size: 1.2rem;
+}
+
+.assessment-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.assessment-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.wizard-step {
+  background: #f9fafb;
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+}
+
+.wizard-header h6 {
+  letter-spacing: 0.01em;
+}
+
+.question-card {
+  background-color: #ffffff;
+}
+
+.selected-list {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
 .modal-content {
   border-radius: 12px;
   overflow: hidden;

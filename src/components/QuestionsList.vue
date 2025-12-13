@@ -202,124 +202,26 @@
     </div>
 
     <!-- Filters -->
-    <div v-else class="filter-section mb-4 shadow-sm">
-      <form class="row g-3 align-items-end">
-        <div class="col-md-3 mb-3">
-          <label for="grade_level_id" class="form-label fw-semibold"
-            >Select Grade Level</label
-          >
-          <select
-            v-model="selectedGrade"
-            id="grade_level_id"
-            class="form-select shadow-sm"
-          >
-            <option :value="''" disabled>Select grade</option>
-            <option
-              v-for="grade in gradeLevels"
-              :key="grade.id"
-              :value="grade.id"
-            >
-              {{ grade.grade_name }}
-            </option>
-          </select>
-        </div>
-
-        <div class="col-md-3 mb-3" v-if="subjects.length">
-          <label for="subject_id" class="form-label fw-semibold">Subject</label>
-          <select
-            v-model="selectedSubject"
-            id="subject_id"
-            class="form-select shadow-sm"
-          >
-            <option value="" disabled>Select subject</option>
-            <option
-              v-for="subject in subjects"
-              :key="subject.id"
-              :value="subject.id"
-            >
-              {{ subject.name }}
-            </option>
-          </select>
-        </div>
-
-        <div class="col-md-3 mb-3" v-if="topics.length">
-          <label for="topic_id" class="form-label fw-semibold">Topic</label>
-          <select
-            v-model="selectedTopic"
-            id="topic_id"
-            class="form-select shadow-sm"
-          >
-            <option value="" disabled>Select topic</option>
-            <option v-for="topic in topics" :key="topic.id" :value="topic.id">
-              {{ topic.topic_name }}
-            </option>
-          </select>
-        </div>
-
-        <!-- Searching question  -->
-        <div class="col-12">
-          <div class="row g-3 search-row align-items-end">
-            <div class="col-md-4 mb-3">
-              <label class="form-label fw-semibold">Search question text</label>
-              <input
-                v-model.trim="searchText"
-                type="text"
-                class="form-control shadow-sm"
-                placeholder="Type to search..."
-                @keyup.enter.prevent="applySearch"
-                :disabled="!selectedTopic"
-              />
-            </div>
-
-            <div class="col-md-2 mb-3">
-              <label class="form-label fw-semibold">Question Type</label>
-              <select v-model="filterQuestionType" class="form-select shadow-sm" :disabled="!selectedTopic">
-                <option value="">All types</option>
-                <option value="mcq">Multiple Choice</option>
-                <option value="true_false">True / False</option>
-                <option value="short_answer">Short Answer</option>
-                <option value="matching">Matching</option>
-              </select>
-            </div>
-
-            <div class="col-md-2 mb-3">
-              <label class="form-label fw-semibold">Difficulty</label>
-              <select v-model="filterDifficulty" class="form-select shadow-sm" :disabled="!selectedTopic">
-                <option value="">All levels</option>
-                <option value="remembering">Remembering</option>
-                <option value="understanding">Understanding</option>
-                <option value="applying">Applying</option>
-                <option value="analyzing">Analyzing</option>
-                <option value="evaluating">Evaluating</option>
-                <option value="creating">Creating</option>
-              </select>
-            </div>
-
-            <div class="col-md-2 mb-3 d-flex justify-content-end gap-2">
-              <button
-                type="button"
-                class="btn btn-primary"
-                @click.prevent="applySearch"
-                :disabled="!selectedTopic"
-              >
-                Search
-              </button>
-              <button
-                type="button"
-                class="btn btn-outline-secondary"
-                @click.prevent="resetFilters"
-                :disabled="!selectedTopic"
-              >
-                Reset
-              </button>
-            </div>
-          </div>
-          <p class="text-muted small mt-1" v-if="!selectedTopic">
-            Select a topic above to enable search.
-          </p>
-        </div>
-      </form>
-    </div>
+    <QuestionsFilters
+      v-else
+      :grade-levels="gradeLevels"
+      :subjects="subjects"
+      :topics="topics"
+      :selected-grade="selectedGrade"
+      :selected-subject="selectedSubject"
+      :selected-topic="selectedTopic"
+      :search-text="searchText"
+      :filter-question-type="filterQuestionType"
+      :filter-difficulty="filterDifficulty"
+      @update:selectedGrade="(val) => (selectedGrade = val)"
+      @update:selectedSubject="(val) => (selectedSubject = val)"
+      @update:selectedTopic="(val) => (selectedTopic = val)"
+      @update:searchText="(val) => (searchText = val)"
+      @update:filterQuestionType="(val) => (filterQuestionType = val)"
+      @update:filterDifficulty="(val) => (filterDifficulty = val)"
+      @search="applySearch"
+      @reset="resetFilters"
+    />
 
     <!-- AI Question Generator Panel -->
     <div v-if="selectedTopic && showAiPanel" class="mb-4">
@@ -534,232 +436,14 @@
           </ul>
         </nav>
       </div>
-      <div
+      <QuestionCard
         v-for="(q, idx) in pagedQuestions"
         :key="q.id"
-        class="card mb-4 border-0 shadow-sm question-card"
-      >
-        <div class="card-body">
-          <!-- Header -->
-          <div class="d-flex justify-content-between align-items-start mb-3">
-            <div class="fw-bold text-secondary">Q{{ idx + 1 }}</div>
-            <span class="badge bg-light text-dark text-capitalize">{{
-              q.question_type || "Text"
-            }}</span>
-            <div class="d-flex align-items-center gap-2">
-              <button
-                type="button"
-                class="btn btn-sm btn-outline-secondary me-1"
-                @click="openEditModal(q)"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="18"
-                  height="18"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    d="M16.862 3.487a2.121 2.121 0 113 3L7.5 18.75 3 21l2.25-4.5L16.862 3.487z"
-                  />
-                </svg>
-              </button>
-              <button
-                type="button"
-                class="btn btn-sm btn-outline-danger"
-                title="Delete Question"
-                @click="confirmDelete(q)"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="18"
-                  height="18"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          <!-- Question -->
-          <div class="mb-3">
-            <div
-              class="fw-semibold fs-5 mb-2"
-              v-html="renderMath(q.question, q.is_math)"
-            ></div>
-            <img
-              v-if="q.question_image_url"
-              :src="q.question_image_url"
-              alt="Question Image"
-              class="img-thumbnail mt-2"
-              style="max-width: 220px; max-height: 150px; object-fit: contain"
-            />
-          </div>
-
-          <!-- Options -->
-          <div>
-            <!-- MCQ -->
-            <template
-              v-if="q.question_type === 'mcq' && Array.isArray(q.options)"
-            >
-              <div
-                v-for="(opt, oidx) in q.options"
-                :key="oidx"
-                class="option-card py-2 px-3 mb-1"
-                :class="{ 'correct': isCorrectOption(q.correct_answer, getOptionValue(opt)) }"
-              >
-                <div class="d-flex align-items-start">
-                  <div class="option-label me-2">{{ String.fromCharCode(65 + oidx) }}.</div>
-                  <div class="flex-grow-1 math-content small">
-                    <div v-html="renderMath(getOptionValue(opt), q.is_math)"></div>
-                    <img
-                      v-if="getOptionImageUrl(opt)"
-                      :src="getOptionImageUrl(opt)"
-                      alt="Option Image"
-                      class="img-thumbnail mt-1"
-                      style="max-width: 180px; max-height: 120px; object-fit: contain"
-                    />
-                  </div>
-                  <div class="ms-1">
-                    <span v-if="isCorrectOption(q.correct_answer, getOptionValue(opt))" class="text-success">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                      </svg>
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </template>
-
-            <!-- True/False -->
-            <template v-else-if="q.question_type === 'true_false'">
-              <div
-                v-for="val in ['true', 'false']"
-                :key="val"
-                class="form-check mb-2 p-1 ms-2"
-                :class="{
-                  'bg-success-subtle border-success': isCorrectOption(
-                    q.correct_answer,
-                    val
-                  ),
-                }"
-              >
-                <input
-                  class="form-check-input me-2"
-                  type="checkbox"
-                  :checked="isCorrectOption(q.correct_answer, val)"
-                  disabled
-                />
-                <label class="form-check-label ms-3">{{
-                  val.charAt(0).toUpperCase() + val.slice(1)
-                }}</label>
-              </div>
-            </template>
-
-            <!-- Short Answer -->
-            <template v-else-if="q.question_type === 'short_answer'">
-              <div class="alert alert-secondary py-2">
-                <strong>Answer: </strong>
-                <span v-html="renderMarkdown(q.correct_answer)"></span>
-              </div>
-            </template>
-
-            <!-- Matching -->
-            <!-- Matching -->
-            <template v-else-if="q.question_type === 'matching'">
-              <div class="matching-container mb-3">
-                <div class="row g-3">
-                  <div class="col-md-5">
-                    <strong>Left Column</strong>
-                    <ul class="list-group list-group-flush">
-                      <li
-                        v-for="(item, idx) in q.matching_items?.left || []"
-                        :key="'left-' + idx"
-                        class="list-group-item matching-item-left"
-                      >
-                        {{ item || `Left ${idx + 1}` }}
-                      </li>
-                    </ul>
-                  </div>
-                  <div class="col-md-5">
-                    <strong>Right Column</strong>
-                    <ul class="list-group list-group-flush">
-                      <li
-                        v-for="(item, idx) in q.matching_items?.right || []"
-                        :key="'right-' + idx"
-                        class="list-group-item matching-item-right"
-                      >
-                        {{ item || `Right ${idx + 1}` }}
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-
-                <!-- Correct Pairs -->
-                <div class="mt-3">
-                  <strong>✅ Correct Pairs:</strong>
-                  <ul class="list-unstyled mb-0">
-                    <li
-                      v-for="(pair, idx) in q.matching_pairs || []"
-                      :key="'pair-' + idx"
-                      class="matching-pair"
-                    >
-                      <span class="pair-left">
-                        {{
-                          q.matching_items?.left?.[pair.left_index] ||
-                          `Left ${pair.left_index + 1}`
-                        }}
-                      </span>
-                      <span class="arrow">→</span>
-                      <span class="pair-right">
-                        {{
-                          q.matching_items?.right?.[pair.right_index] ||
-                          `Right ${pair.right_index + 1}`
-                        }}
-                      </span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </template>
-          </div>
-
-          <!-- Footer -->
-          <div
-            class="d-flex justify-content-between align-items-center mt-3 border-top pt-2"
-          >
-            <span class="badge bg-light text-dark"
-              >{{ q.marks || 1 }} {{ q.marks === 1 ? "point" : "points" }}</span
-            >
-            <div>
-              <span
-                v-if="q.difficulty_level"
-                class="badge bg-warning text-dark me-1"
-                >{{ q.difficulty_level }}</span
-              >
-              <span v-if="q.required" class="badge bg-primary">Required</span>
-            </div>
-          </div>
-
-          <!-- Explanation -->
-          <div v-if="q.explanation" class="alert alert-info mt-3">
-            <div class="fw-semibold">💡 Explanation:</div>
-            <div v-html="renderMath(q.explanation, q.is_math)"></div>
-          </div>
-        </div>
-      </div>
+        :question="q"
+        :index-label="idx + 1"
+        @edit="openEditModal"
+        @delete="confirmDelete"
+      />
     </div>
 
     <!-- Edit Modal -->
@@ -800,13 +484,15 @@
 <script>
 import axios from "axios";
 import QuestionForm from "./QuestionFormWithMathKaTeX.vue";
+import QuestionCard from "./QuestionCard.vue";
+import QuestionsFilters from "./QuestionsFilters.vue";
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import { renderMath as renderMathUtil } from "@/utils/mathRenderer";
 
 export default {
   name: "QuestionsList",
-  components: { QuestionForm },
+  components: { QuestionForm, QuestionCard, QuestionsFilters },
 
   data() {
     return {
@@ -904,6 +590,11 @@ export default {
           newQ.matching_pairs = Array.isArray(newQ.correct_answer)
             ? newQ.correct_answer
             : [];
+        }
+
+        // Normalize sub-questions (same structure as normal questions)
+        if (Array.isArray(newQ.sub_questions) && newQ.sub_questions.length) {
+          newQ.sub_questions = this.processArray(newQ.sub_questions);
         }
 
         return newQ;
@@ -1510,6 +1201,19 @@ export default {
   background-color: #e7f1ff;
   border-radius: 0.5rem;
   padding: 0.75rem 0.75rem 0.25rem;
+}
+
+.questions-list img.img-thumbnail {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: zoom-in;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .questions-list img.img-thumbnail:hover {
+    transform: scale(2);
+    z-index: 10;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  }
 }
 
 </style>

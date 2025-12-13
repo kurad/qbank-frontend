@@ -1,7 +1,7 @@
 <template>
   <form @submit.prevent="handleSubmit" class="needs-validation" novalidate>
-    <!-- Question Settings -->
-    <div class="form-section mb-4">
+    <!-- Question Settings (hidden when using sub-questions) -->
+    <div class="form-section mb-4" v-if="!hasSubQuestions">
       <h3 class="section-subtitle mb-3">Question Settings</h3>
       <div class="row g-3 align-items-end question-settings-row">
         <div class="col-md-4 col-lg-3">
@@ -90,7 +90,17 @@
           <div class="mt-2 p-2 border rounded" v-html="renderedPreview"></div>
         </div>
         <div class="flex-grow-1" v-else>
+          <textarea
+            v-if="questionType === 'short_answer' && isLongQuestionText"
+            class="form-control"
+            v-model="form.question"
+            :id="`question_${questionType}`"
+            rows="3"
+            required
+            placeholder="Enter your question here..."
+          ></textarea>
           <input
+            v-else
             class="form-control"
             v-model="form.question"
             :id="`question_${questionType}`"
@@ -138,8 +148,11 @@
         </button>
       </div>
 
-      <!-- MCQ & True/False Options -->
-      <div v-if="['mcq', 'true_false'].includes(questionType)" class="mb-3">
+      <!-- MCQ & True/False Options (hidden when using sub-questions) -->
+      <div
+        v-if="['mcq', 'true_false'].includes(questionType) && !hasSubQuestions"
+        class="mb-3"
+      >
         <label class="form-label">Options</label>
         <div
           v-for="(option, idx) in form.options"
@@ -298,12 +311,48 @@
           <div class="p-2 border rounded bg-light" v-html="renderMathString(answerText)"></div>
         </div>
         <div v-else>
+          <textarea
+            v-if="isLongShortAnswerText"
+            class="form-control"
+            v-model="form.correct_answer"
+            rows="3"
+            placeholder="Enter the expected answer"
+            required
+          ></textarea>
           <input
+            v-else
             class="form-control"
             type="text"
             v-model="form.correct_answer"
             placeholder="Enter the expected answer"
             required
+          />
+        </div>
+        <div class="mt-2 d-flex align-items-center gap-2">
+          <label class="btn btn-outline-secondary btn-sm mb-0">
+            <input
+              type="file"
+              accept="image/*"
+              style="display: none"
+              @change="onCorrectAnswerImageChange"
+            />
+            Add answer image
+          </label>
+          <button
+            v-if="correctAnswerImagePreview"
+            type="button"
+            class="btn btn-outline-danger btn-sm"
+            @click="removeCorrectAnswerImage"
+          >
+            &times; Remove
+          </button>
+        </div>
+        <div v-if="correctAnswerImagePreview" class="mt-2">
+          <img
+            :src="correctAnswerImagePreview"
+            alt="Correct Answer Image Preview"
+            class="img-thumbnail"
+            style="max-width: 200px; max-height: 150px"
           />
         </div>
         <div class="form-text mt-1">
@@ -376,59 +425,27 @@
           <button type="button" class="btn btn-outline-success btn-sm mt-2" @click="addMatchingPair">+ Add Pair</button>
         </div>
       </div>
-    </div>
 
-    <!-- Shared Settings -->
-    <div class="mb-3">
-      <div class="form-check form-check-inline">
-        <input
-          class="form-check-input"
-          type="checkbox"
-          v-model="form.is_math"
-          :id="`is_math_${questionType}`"
-        />
-        <label class="form-check-label" :for="`is_math_${questionType}`"
-          >Math Question</label
-        >
-      </div>
-      <div class="form-check form-check-inline">
-        <input
-          class="form-check-input"
-          type="checkbox"
-          v-model="form.is_required"
-          :id="`required_${questionType}`"
-        />
-        <label class="form-check-label" :for="`required_${questionType}`"
-          >Required</label
-        >
-      </div>
-    </div>
-
-    <!-- Additional Information -->
-    <div class="form-section mb-4">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <h3 class="section-subtitle mb-0">Additional Information</h3>
-        <button
-          type="button"
-          class="btn btn-sm btn-outline-secondary"
-          @click="showAdditionalInfo = !showAdditionalInfo"
-        >
-          {{ showAdditionalInfo ? "Hide" : "Show" }}
-        </button>
-      </div>
-      <div v-if="showAdditionalInfo" class="additional-info-section">
-        <div class="mb-3">
-          <label for="explanation" class="form-label"
-            >Explanation (Optional)</label
-          >
-          <textarea
-            v-model="form.explanation"
-            id="explanation"
-            class="form-control"
-            rows="3"
-            placeholder="Provide an explanation for the correct answer..."
-          ></textarea>
+      <!-- Sub-questions (optional) -->
+      <div class="form-section mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h3 class="section-subtitle mb-0">Sub-questions</h3>
+          <div class="form-check form-switch">
+            <input
+              class="form-check-input"
+              type="checkbox"
+              id="has_sub_questions"
+              v-model="hasSubQuestions"
+            />
+            <label class="form-check-label" for="has_sub_questions">
+              This question has sub-questions (e.g. passage with follow-up items)
+            </label>
+          </div>
         </div>
+        <SubQuestionsEditor
+          v-if="hasSubQuestions"
+          v-model="subQuestions"
+        />
       </div>
     </div>
 
@@ -460,9 +477,11 @@ import "mathlive";
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import axios from "axios";
+import SubQuestionsEditor from "./SubQuestionsEditor.vue";
 
 export default {
   name: "QuestionFormWithMathKaTeX",
+  components: { SubQuestionsEditor },
   props: {
     subjectId: { type: [Number, String], required: true },
     topicId: { type: [Number, String], required: true },
@@ -491,17 +510,35 @@ export default {
       },
       answerText: "",
       questionImage: null,
+      correctAnswerImage: null,
       optionImages: [],
       optionImagePreviews: [],
       showAdditionalInfo: false,
       questionImagePreview: "",
+      correctAnswerImagePreview: "",
       error: "",
       success: false,
       isEditMode: false,
       questionText: "",
       mathEquation: "",
       renderedPreview: "",
+      hasSubQuestions: false,
+      subQuestions: [],
     };
+  },
+  computed: {
+    isLongQuestionText() {
+      const text = this.form && typeof this.form.question === 'string'
+        ? this.form.question
+        : '';
+      return text.length > 80;
+    },
+    isLongShortAnswerText() {
+      const text = this.form && typeof this.form.correct_answer === 'string'
+        ? this.form.correct_answer
+        : '';
+      return text.length > 80;
+    },
   },
   mounted() {
     if (!this.editQuestion) return;
@@ -601,6 +638,30 @@ export default {
     // 5️⃣ Load question image preview
     if (q.question_image_url) {
       this.questionImagePreview = q.question_image_url;
+    }
+
+    // 6️⃣ Load correct answer image preview (short answer only)
+    if (q.correct_answer_image_url) {
+      this.correctAnswerImagePreview = q.correct_answer_image_url;
+    }
+
+    // 7️⃣ Initialize sub-questions if present
+    if (Array.isArray(q.sub_questions) && q.sub_questions.length) {
+      this.hasSubQuestions = true;
+      this.subQuestions = q.sub_questions.map((sq) => ({
+        id: sq.id,
+        question: sq.question || "",
+        question_type: sq.question_type || "short_answer",
+        options: Array.isArray(sq.options) ? [...sq.options] : ["", ""],
+        correct_answer: sq.correct_answer ?? "",
+        difficulty_level: sq.difficulty_level || "",
+        marks:
+          typeof sq.marks === "number"
+            ? sq.marks
+            : sq.marks
+            ? Number(sq.marks) || 1
+            : 1,
+      }));
     }
 
     // 6️⃣ Render math preview if needed
@@ -888,6 +949,17 @@ export default {
       this.questionImage = null;
       this.questionImagePreview = "";
     },
+    onCorrectAnswerImageChange(e) {
+      const file = e.target.files[0];
+      if (file) {
+        this.correctAnswerImage = file;
+        this.correctAnswerImagePreview = URL.createObjectURL(file);
+      }
+    },
+    removeCorrectAnswerImage() {
+      this.correctAnswerImage = null;
+      this.correctAnswerImagePreview = "";
+    },
     addMatchingItem(column) {
       this.form.matching_items[column].push("");
     },
@@ -960,10 +1032,50 @@ export default {
           if (val !== "") return val;
           return `Option ${String.fromCharCode(65 + idx)}`;
         });
+        // Ensure correct_answer matches one of the options
+        if (!this.form.options.includes(this.form.correct_answer)) {
+          this.form.correct_answer = this.form.options[0] || "";
+        }
       }
 
       // Prepare FormData
       const formData = new FormData();
+
+      // Prepare sub-questions fields for FormData if enabled
+      const cleanedSubQuestions = [];
+      if (this.hasSubQuestions) {
+        (this.subQuestions || [])
+          .filter((sq) => (sq.question || "").toString().trim() !== "")
+          .forEach((sq) => {
+            const base = {
+              id: sq.id || null,
+              question: sq.question || "",
+              question_type: sq.question_type || "short_answer",
+              marks: sq.marks ?? 1,
+              difficulty_level: sq.difficulty_level || "",
+            };
+
+            if (sq.question_type === "mcq") {
+              base.options = Array.isArray(sq.options)
+                ? sq.options.map((o) => (o || "").toString())
+                : ["", ""];
+              base.correct_answer = sq.correct_answer ?? "";
+              if (Array.isArray(base.options) && base.options.length) {
+                if (!base.options.includes(base.correct_answer)) {
+                  base.correct_answer = base.options[0];
+                }
+              }
+            } else if (sq.question_type === "true_false") {
+              base.options = ["true", "false"];
+              base.correct_answer = sq.correct_answer ?? "";
+            } else {
+              base.options = null;
+              base.correct_answer = sq.correct_answer ?? "";
+            }
+
+            cleanedSubQuestions.push(base);
+          });
+      }
 
       // For matching questions, set options and correct_answer to JSON strings
       let optionsToSend = this.form.options;
@@ -1003,10 +1115,12 @@ export default {
       }
 
       // Marks & difficulty
-      // For matching and short_answer, always send user-entered marks (default 1 if empty).
-      // For other types, only send marks when provided; otherwise backend will auto-calc from difficulty.
+      // If this question has sub-questions, treat parent as stem: marks = 0.
+      // Otherwise, use existing behavior.
       const rawMarks = this.form.marks;
-      if (["matching", "short_answer"].includes(this.questionType)) {
+      if (this.hasSubQuestions) {
+        formData.append("marks", "0");
+      } else if (["matching", "short_answer"].includes(this.questionType)) {
         let effectiveMarks = rawMarks;
         if (effectiveMarks === null || effectiveMarks === undefined || effectiveMarks === "") {
           effectiveMarks = 1;
@@ -1035,8 +1149,52 @@ export default {
         this.selectedGradeFilter !== "" ? String(this.selectedGradeFilter) : ""
       );
 
+      formData.append("has_sub_questions", this.hasSubQuestions ? "1" : "0");
+
+      // Append sub-questions as nested fields so Laravel receives an array structure
+      if (cleanedSubQuestions.length) {
+        cleanedSubQuestions.forEach((sq, index) => {
+          if (sq.id !== null && sq.id !== undefined) {
+            formData.append(`sub_questions[${index}][id]`, String(sq.id));
+          }
+          formData.append(`sub_questions[${index}][question]`, sq.question || "");
+          formData.append(
+            `sub_questions[${index}][question_type]`,
+            sq.question_type || "short_answer"
+          );
+          formData.append(
+            `sub_questions[${index}][marks]`,
+            sq.marks != null ? String(sq.marks) : "1"
+          );
+          formData.append(
+            `sub_questions[${index}][difficulty_level]`,
+            sq.difficulty_level || ""
+          );
+
+          if (sq.question_type === "mcq" || sq.question_type === "true_false") {
+            (sq.options || []).forEach((opt, optIdx) => {
+              formData.append(
+                `sub_questions[${index}][options][${optIdx}]`,
+                (opt || "").toString()
+              );
+            });
+          } else {
+            // For non-MCQ/TF, send options as null-equivalent
+            formData.append(`sub_questions[${index}][options]`, "");
+          }
+
+          formData.append(
+            `sub_questions[${index}][correct_answer]`,
+            sq.correct_answer != null ? String(sq.correct_answer) : ""
+          );
+        });
+      }
+
       if (this.questionImage) {
         formData.append("question_image", this.questionImage);
+      }
+      if (this.questionType === 'short_answer' && this.correctAnswerImage) {
+        formData.append('correct_answer_image', this.correctAnswerImage);
       }
 
       // Handle edit mode
@@ -1216,5 +1374,19 @@ export default {
 
 .font-semibold {
   font-weight: 600;
+}
+
+/* Hover magnifier for image previews in the question form */
+img.img-thumbnail {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: zoom-in;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  img.img-thumbnail:hover {
+    transform: scale(2);
+    z-index: 10;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  }
 }
 </style>

@@ -97,7 +97,7 @@
           type="button"
           @click="currentTab = 'questions'"
         >
-          Questions
+          Normal Paper
         </button>
       </li>
       <li class="nav-item">
@@ -107,7 +107,7 @@
           type="button"
           @click="currentTab = 'sections'"
         >
-          Sections
+          Standard Paper
         </button>
       </li>
     </ul>
@@ -143,6 +143,32 @@
                     Type: {{ element.question.question_type }} | Points:
                     {{ element.question.marks }}
                   </small>
+
+                  <!-- Parent question: show sub-questions summary if present -->
+                  <div
+                    v-if="element.question.question_type === 'parent' && Array.isArray(element.question.sub_questions) && element.question.sub_questions.length"
+                    class="mt-2 ps-2 border-start"
+                  >
+                    <div class="fw-semibold mb-1">Sub-questions:</div>
+                    <ol class="mb-2 ps-3">
+                      <li
+                        v-for="(sub, sIdx) in element.question.sub_questions"
+                        :key="sub.id || sIdx"
+                        class="mb-1"
+                      >
+                        <div>
+                          <span v-html="sub.question"></span>
+                        </div>
+                        <small class="text-muted">
+                          Type: {{ sub.question_type }}
+                          <span v-if="sub.marks != null && sub.marks !== ''">
+                            | Points: {{ sub.marks }}
+                          </span>
+                        </small>
+                      </li>
+                    </ol>
+                  </div>
+
                   <!-- Render options/answers -->
                   <div class="mt-2">
                     <!-- MCQ -->
@@ -346,6 +372,32 @@ export default {
     };
   },
 
+  computed: {
+    totalMarks() {
+      try {
+        return this.localQuestions.reduce((sum, item) => {
+          const q = item && item.question ? item.question : null;
+          if (!q) return sum;
+
+          // If there are sub-questions, use the sum of their marks
+          if (Array.isArray(q.sub_questions) && q.sub_questions.length) {
+            const subTotal = q.sub_questions.reduce((s, sub) => {
+              const m = parseFloat(sub && sub.marks != null ? sub.marks : 0);
+              return s + (isNaN(m) ? 0 : m);
+            }, 0);
+            return sum + subTotal;
+          }
+
+          // Otherwise, fall back to the question's own marks
+          const m = parseFloat(q.marks != null ? q.marks : 0);
+          return sum + (isNaN(m) ? 0 : m);
+        }, 0);
+      } catch (_) {
+        return 0;
+      }
+    },
+  },
+
   mounted() {
     this.loadData();
   },
@@ -393,42 +445,31 @@ export default {
     },
 
     async exportStudentPdf() {
-      if (!this.assessment?.id || !this.localQuestions.length) {
-        alert("No questions to export.");
+      if (!this.assessment?.id) {
+        alert("Assessment ID is missing.");
         return;
       }
-      const gen = this.$refs.pdfGen;
-      if (!gen || typeof gen.generatePdf !== "function") {
-        alert("PDF generator is not available.");
-        return;
-      }
-      // Map localQuestions (wrapper objects) into plain question objects
-      const qs = this.localQuestions.map((item) => {
-        const q = item.question || {};
-        let options = q.options;
-        if (q.question_type === "mcq") {
-          try {
-            // Use same helper as UI to normalize options
-            const parsed = parseOptions(q.options);
-            options = parsed.map((opt) => ({
-              option_text: getOptionValue(opt),
-              option_image: getOptionImageUrl(opt) || null,
-              is_correct: isCorrectOption(q.correct_answer, getOptionValue(opt)),
-            }));
-          } catch (e) {
-            options = [];
-          }
-        }
-        return {
-          ...q,
-          question_text: q.question_text || q.question || "",
-          is_math: q.is_math || false,
-          options,
-        };
-      });
       this.exportingStudent = true;
       try {
-        await gen.generatePdf(this.assessment, qs, false /* isTeacher */);
+        const response = await axios.get(
+          `/assessments/${this.assessment.id}/pdf/student?layout=standard`,
+          { responseType: "blob" }
+        );
+
+        const blob = new Blob([response.data], { type: "application/pdf" });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+
+        const safeTitle = (this.assessment.title || "assessment")
+          .replace(/[^a-z0-9]/gi, "-")
+          .toLowerCase();
+
+        link.href = url;
+        link.download = `student-assessment-${safeTitle}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
       } catch (e) {
         console.error("Failed to export student PDF", e);
         alert("Failed to export student PDF.");
@@ -450,6 +491,9 @@ export default {
       const qs = this.localQuestions.map((item) => {
         const q = item.question || {};
         let options = q.options;
+        let matching_items = q.matching_items || null;
+        let matching_pairs = q.matching_pairs || null;
+
         if (q.question_type === "mcq") {
           try {
             const parsed = parseOptions(q.options);
@@ -461,12 +505,19 @@ export default {
           } catch (e) {
             options = [];
           }
+        } else if (q.question_type === "matching") {
+          const mi = getMatchingItems(q);
+          matching_items = { left: mi.left, right: mi.right };
+          matching_pairs = mi.pairs;
         }
+
         return {
           ...q,
           question_text: q.question_text || q.question || "",
           is_math: q.is_math || false,
           options,
+          matching_items,
+          matching_pairs,
         };
       });
       this.exportingTeacher = true;
@@ -485,56 +536,27 @@ export default {
         alert("Assessment ID is missing.");
         return;
       }
-      const gen = this.$refs.standardPdfGen;
-      if (!gen || typeof gen.generatePdf !== "function") {
-        alert("Standard PDF generator is not available.");
-        return;
-      }
-
       this.exportingStudent = true;
       try {
-        const res = await axios.get(`/assessments/${this.assessment.id}/sections`);
-        const payload = res.data || {};
-        const sections = Array.isArray(payload.sections) ? payload.sections : [];
-        if (!sections.length) {
-          alert("No sections found for this assessment.");
-          return;
-        }
+        const response = await axios.get(
+          `/assessments/${this.assessment.id}/pdf/student?layout=normal`,
+          { responseType: "blob" }
+        );
 
-        const normalizeQuestion = (q) => {
-          if (!q) return null;
-          let options = q.options;
-          if (q.question_type === "mcq") {
-            try {
-              const parsed = parseOptions(q.options);
-              options = parsed.map((opt) => ({
-                option_text: getOptionValue(opt),
-                option_image: getOptionImageUrl(opt) || null,
-                is_correct: isCorrectOption(q.correct_answer, getOptionValue(opt)),
-              }));
-            } catch (e) {
-              options = [];
-            }
-          }
-          return {
-            ...q,
-            question_text: q.question_text || q.question || "",
-            is_math: q.is_math || false,
-            options,
-          };
-        };
+        const blob = new Blob([response.data], { type: "application/pdf" });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
 
-        const sectionPayload = sections.map((s) => ({
-          id: s.id,
-          ordering: s.ordering,
-          title: s.title,
-          instruction: s.instruction,
-          questions: Array.isArray(s.questions)
-            ? s.questions.map((q) => normalizeQuestion(q)).filter(Boolean)
-            : [],
-        }));
+        const safeTitle = (this.assessment.title || "assessment-sections")
+          .replace(/[^a-z0-9]/gi, "-")
+          .toLowerCase();
 
-        await gen.generatePdf(this.assessment, sectionPayload, false);
+        link.href = url;
+        link.download = `student-assessment-${safeTitle}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
       } catch (e) {
         console.error("Failed to export standard student PDF", e);
         alert("Failed to export standard student PDF.");

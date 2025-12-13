@@ -55,7 +55,7 @@
           </div>
         </div>
         <div class="row g-3">
-          <div class="col-md-3">
+          <div class="col-md-3" v-if="!it.hasSubQuestions">
             <label class="form-label">Type</label>
             <select v-model="it.question_type" class="form-select form-select-sm">
               <option value="mcq">Multiple Choice</option>
@@ -89,7 +89,7 @@
               <img :src="it.questionImagePreview" alt="Question Image Preview" class="img-thumbnail" style="max-width: 200px; max-height: 150px" />
             </div>
           </div>
-          <template v-if="it.question_type === 'mcq'">
+          <template v-if="it.question_type === 'mcq' && !it.hasSubQuestions">
             <div class="col-12">
               <label class="form-label">Options</label>
               <div class="d-flex flex-wrap gap-2">
@@ -123,7 +123,7 @@
             </div>
           </template>
 
-          <template v-else-if="it.question_type === 'true_false'">
+          <template v-else-if="it.question_type === 'true_false' && !it.hasSubQuestions">
             <div class="col-12">
               <div class="form-check form-check-inline">
                 <input class="form-check-input" type="radio" :name="`tf_${it.uid}`" value="true" v-model="it.correct_answer" />
@@ -136,7 +136,7 @@
             </div>
           </template>
 
-          <template v-else-if="it.question_type === 'short_answer'">
+          <template v-else-if="it.question_type === 'short_answer' && !it.hasSubQuestions">
             <div class="col-12">
               <label class="form-label">Expected Answer</label>
               <template v-if="it.is_math">
@@ -151,10 +151,38 @@
                 <textarea v-if="it.useTextarea" class="form-control form-control-sm" v-model="it.correct_answer" rows="3" placeholder="Enter expected answer..."></textarea>
                 <input v-else class="form-control form-control-sm" v-model="it.correct_answer" placeholder="Enter expected answer..." />
               </template>
+              <div class="mt-2 d-flex align-items-center gap-2">
+                <label class="btn btn-outline-secondary btn-sm mb-0">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    :id="`cai_${it.uid}`"
+                    style="display:none"
+                    @change="onCorrectAnswerImageChange(it, $event)"
+                  />
+                  Add answer image
+                </label>
+                <button
+                  v-if="it.correctAnswerImagePreview"
+                  type="button"
+                  class="btn btn-outline-danger btn-sm"
+                  @click="removeCorrectAnswerImage(it)"
+                >
+                  &times; Remove
+                </button>
+              </div>
+              <div v-if="it.correctAnswerImagePreview" class="mt-2">
+                <img
+                  :src="it.correctAnswerImagePreview"
+                  alt="Correct Answer Image Preview"
+                  class="img-thumbnail"
+                  style="max-width: 200px; max-height: 150px"
+                />
+              </div>
             </div>
           </template>
 
-          <template v-else-if="it.question_type === 'matching'">
+          <template v-else-if="it.question_type === 'matching' && !it.hasSubQuestions">
             <div class="col-md-6">
               <strong>Left Column</strong>
               <div v-for="(lv, li) in it.matching_items.left" :key="'l-' + li" class="input-group input-group-sm mb-2">
@@ -195,7 +223,29 @@
             </div>
           </template>
 
-          <div class="col-12">
+          <!-- Sub-questions (optional, parent/container question) -->
+          <div class="col-12 mt-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="mb-0">Sub-questions</h6>
+              <div class="form-check form-switch">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  :id="`has_sub_${it.uid}`"
+                  v-model="it.hasSubQuestions"
+                />
+                <label class="form-check-label" :for="`has_sub_${it.uid}`">
+                  This question has sub-questions
+                </label>
+              </div>
+            </div>
+            <SubQuestionsEditor
+              v-if="it.hasSubQuestions"
+              v-model="it.subQuestions"
+            />
+          </div>
+
+          <div class="col-12" v-if="!it.hasSubQuestions">
             <div class="row g-2">
               <div class="col-md-4">
                 <label class="form-label">Difficulty (Bloom's)</label>
@@ -248,9 +298,11 @@
 import 'mathlive';
 import axios from 'axios';
 import { questionService } from '@/services/questionService';
+import SubQuestionsEditor from './SubQuestionsEditor.vue';
 
 export default {
   name: 'BulkQuestionCreator',
+  components: { SubQuestionsEditor },
   data() {
     return {
       gradeLevels: [],
@@ -294,8 +346,12 @@ export default {
           optionImagePreviews: [],
           questionImage: null,
           questionImagePreview: '',
+          correctAnswerImage: null,
+          correctAnswerImagePreview: '',
           matching_items: { left: ['', ''], right: ['', ''] },
           matching_pairs: [{ left_index: null, right_index: null }],
+          hasSubQuestions: false,
+          subQuestions: [],
         });
       }
     },
@@ -322,6 +378,43 @@ export default {
       const fd = new FormData();
       fd.append('question_type', it.question_type);
       fd.append('question', it.question || '');
+
+      // Prepare sub-questions if enabled on this item
+      const cleanedSubQuestions = [];
+      if (it.hasSubQuestions) {
+        (it.subQuestions || [])
+          .filter((sq) => (sq.question || '').toString().trim() !== '')
+          .forEach((sq) => {
+            const base = {
+              id: sq.id || null,
+              question: sq.question || '',
+              question_type: sq.question_type || 'short_answer',
+              marks: sq.marks ?? 1,
+              difficulty_level: sq.difficulty_level || '',
+            };
+
+            if (sq.question_type === 'mcq') {
+              base.options = Array.isArray(sq.options)
+                ? sq.options.map((o) => (o || '').toString())
+                : ['', ''];
+              base.correct_answer = sq.correct_answer ?? '';
+              if (Array.isArray(base.options) && base.options.length) {
+                if (!base.options.includes(base.correct_answer)) {
+                  base.correct_answer = base.options[0];
+                }
+              }
+            } else if (sq.question_type === 'true_false') {
+              base.options = ['true', 'false'];
+              base.correct_answer = sq.correct_answer ?? '';
+            } else {
+              base.options = null;
+              base.correct_answer = sq.correct_answer ?? '';
+            }
+
+            cleanedSubQuestions.push(base);
+          });
+      }
+
       if (it.question_type === 'mcq') {
         (it.options || []).forEach((opt, i) => {
           fd.append(`options[${i}]`, opt);
@@ -341,7 +434,7 @@ export default {
         fd.append('correct_answer', it.correct_answer || '');
       }
       fd.append('explanation', it.explanation || '');
-  fd.append('difficulty_level', it.difficulty_level || 'remembering');
+      fd.append('difficulty_level', it.difficulty_level || 'remembering');
       fd.append('is_math', it.is_math ? '1' : '0');
       fd.append('is_chemistry', '0');
       fd.append('multiple_answers', '0');
@@ -349,8 +442,58 @@ export default {
       fd.append('subject_id', this.selectedSubject);
       fd.append('topic_id', this.selectedTopic);
       fd.append('grade_level_id', String(this.selectedGrade));
+
+      // Marks & sub-questions metadata
+      if (it.hasSubQuestions) {
+        fd.append('marks', '0');
+      } else if (it.marks !== null && it.marks !== undefined && it.marks !== '') {
+        fd.append('marks', String(it.marks));
+      }
+
+      fd.append('has_sub_questions', it.hasSubQuestions ? '1' : '0');
+
+      if (cleanedSubQuestions.length) {
+        cleanedSubQuestions.forEach((sq, index) => {
+          if (sq.id !== null && sq.id !== undefined) {
+            fd.append(`sub_questions[${index}][id]`, String(sq.id));
+          }
+          fd.append(`sub_questions[${index}][question]`, sq.question || '');
+          fd.append(
+            `sub_questions[${index}][question_type]`,
+            sq.question_type || 'short_answer'
+          );
+          fd.append(
+            `sub_questions[${index}][marks]`,
+            sq.marks != null ? String(sq.marks) : '1'
+          );
+          fd.append(
+            `sub_questions[${index}][difficulty_level]`,
+            sq.difficulty_level || ''
+          );
+
+          if (sq.question_type === 'mcq' || sq.question_type === 'true_false') {
+            (sq.options || []).forEach((opt, optIdx) => {
+              fd.append(
+                `sub_questions[${index}][options][${optIdx}]`,
+                (opt || '').toString()
+              );
+            });
+          } else {
+            fd.append(`sub_questions[${index}][options]`, '');
+          }
+
+          fd.append(
+            `sub_questions[${index}][correct_answer]`,
+            sq.correct_answer != null ? String(sq.correct_answer) : ''
+          );
+        });
+      }
+
       if (it.questionImage) {
         fd.append('question_image', it.questionImage);
+      }
+      if (it.question_type === 'short_answer' && it.correctAnswerImage) {
+        fd.append('correct_answer_image', it.correctAnswerImage);
       }
       return fd;
     },
@@ -363,6 +506,20 @@ export default {
     removeQuestionImage(it) {
       it.questionImage = null;
       it.questionImagePreview = '';
+    },
+    onCorrectAnswerImageChange(it, e) {
+      const file = e?.target?.files?.[0];
+      if (!file) return;
+      it.correctAnswerImage = file;
+      try {
+        it.correctAnswerImagePreview = URL.createObjectURL(file);
+      } catch {
+        it.correctAnswerImagePreview = '';
+      }
+    },
+    removeCorrectAnswerImage(it) {
+      it.correctAnswerImage = null;
+      it.correctAnswerImagePreview = '';
     },
     onOptionImageChange(it, oidx, e) {
       const file = e?.target?.files?.[0];
@@ -529,7 +686,8 @@ export default {
       // Basic validation
       for (const it of this.items) {
         if (!it.question) { this.error = 'Each question must have text.'; return; }
-        if (it.question_type === 'mcq') {
+        // When hasSubQuestions is true, treat this row as a parent stem: skip MCQ option/answer validation.
+        if (it.question_type === 'mcq' && !it.hasSubQuestions) {
           // Normalize MCQ options (ensure non-empty labels for image-only options)
           it.options = (it.options || []).map((opt, idx) => {
             const val = (opt || '').toString().trim();
@@ -566,4 +724,18 @@ export default {
 
 <style scoped>
 .card-body label { font-weight: 600; }
+
+/* Hover magnifier for image previews in the bulk creator */
+.container img.img-thumbnail {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: zoom-in;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .container img.img-thumbnail:hover {
+    transform: scale(2);
+    z-index: 10;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  }
+}
 </style>

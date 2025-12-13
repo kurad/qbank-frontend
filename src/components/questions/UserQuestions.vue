@@ -49,7 +49,16 @@
               <div style="min-width:0;">
                 <div class="d-flex align-items-start mb-2">
                   <span class="badge bg-primary bg-opacity-10 text-primary me-2">Q{{ qIndex + 1 }}</span>
-                  <div v-html="renderMath(q.question)" class="flex-grow-1"></div>
+                  <div class="flex-grow-1">
+                    <div v-html="renderMath(q.question)"></div>
+                    <img
+                      v-if="q.question_image || q.question_image_url"
+                      :src="getQuestionImageUrl(q)"
+                      alt="Question Image"
+                      class="img-thumbnail mt-2"
+                      style="max-width: 220px; max-height: 150px; object-fit: contain;"
+                    />
+                  </div>
                 </div>
                 <div v-if="q.question_type === 'mcq' && getOptions(q).length" class="mt-3 ms-1">
                   <div v-for="(opt, oidx) in getOptions(q)" :key="oidx" class="d-flex align-items-start mb-2">
@@ -66,6 +75,13 @@
                           <span class="fw-bold me-2 text-muted">{{ String.fromCharCode(65 + oidx) }}.</span>
                           <span v-html="renderMath(getOptionValue(opt))" class="flex-grow-1"></span>
                         </div>
+                        <img
+                          v-if="getOptionImageUrl(opt)"
+                          :src="getOptionImageUrl(opt)"
+                          alt="Option Image"
+                          class="img-thumbnail mt-1"
+                          style="max-width: 180px; max-height: 120px; object-fit: contain;"
+                        />
                       </div>
                     </div>
                   </div>
@@ -96,10 +112,35 @@
                     </div>
                   </div>
                 </div>
+                <!-- Show sub-questions summary whenever sub_questions are present -->
+                <div
+                  v-if="Array.isArray(q.sub_questions) && q.sub_questions.length"
+                  class="mt-2 ps-2 border-start"
+                >
+                  <div class="fw-semibold mb-1">Sub-questions:</div>
+                  <ol class="mb-2 ps-3">
+                    <li
+                      v-for="(sub, sIdx) in q.sub_questions"
+                      :key="sub.id || sIdx"
+                      class="mb-1"
+                    >
+                      <div>
+                        <span v-html="renderMath(sub.question)"></span>
+                      </div>
+                      <small class="text-muted">
+                        Type: {{ formatQuestionType(sub.question_type) }}
+                        <span v-if="sub.marks != null && sub.marks !== ''">
+                          | Points: {{ sub.marks }}
+                        </span>
+                      </small>
+                    </li>
+                  </ol>
+                </div>
+
                 <div class="d-flex flex-wrap gap-3 mt-3 pt-2 border-top">
                   <span class="text-muted small">
                     <i class="bi bi-tag me-1"></i>
-                    <span class="text-capitalize">{{ q.question_type.replace('_', ' ') }}</span>
+                    <span class="text-capitalize">{{ formatQuestionType(q.question_type) }}</span>
                   </span>
                   <span class="small" :class="getDifficultyClass(q.difficulty_level)">
                     <i class="bi bi-speedometer2 me-1"></i>
@@ -161,6 +202,7 @@ import { Modal } from 'bootstrap';
 import QuestionFormWithMathKaTeX from '../QuestionFormWithMathKaTeX.vue';
 import { renderMath as renderMathUtil } from '@/utils/mathRenderer';
 import { renderMarkdown } from "@/utils/markdownRenderer";
+import { getQuestionImageUrl, getOptionImageUrl } from "@/utils/questionDisplay";
 
 export default {
   name: "MyQuestions",
@@ -182,6 +224,8 @@ export default {
     QuestionFormWithMathKaTeX
   },
   methods: {
+    getQuestionImageUrl,
+    getOptionImageUrl,
     openEditModal() {
       if (!this.editModal) {
         this.editModal.show();
@@ -205,6 +249,14 @@ export default {
         'hard': 'text-danger'
       };
       return classes[level.toLowerCase()] || 'text-muted';
+    },
+    formatQuestionType(type) {
+      if (!type) return '';
+      try {
+        return String(type).replace('_', ' ');
+      } catch {
+        return String(type);
+      }
     },
     async fetchQuestions(page = 1) {
       this.loading = true;
@@ -309,7 +361,6 @@ export default {
           throw new Error('Authentication required');
         }
         
-        console.log('Making request to fetch question...');
         const response = await axios.get(`/questions/${question.id}`, {
           headers: { 
             'Content-Type': 'application/json',
@@ -318,17 +369,13 @@ export default {
           },
           validateStatus: (status) => status < 500 // Don't throw for 4xx errors
         });
-        
-        console.log('Response received:', response);
-        
+                
         if (response.status === 200 && response.data) {
           // Handle both nested and direct response formats
           const questionData = response.data.data || response.data;
-          console.log('Question data:', questionData);
           if (questionData) {
             this.editingQuestion = questionData;
             this.$nextTick(() => {
-              console.log('Opening edit modal...');
               this.openEditModal();
             });
             return;
@@ -340,7 +387,6 @@ export default {
         throw new Error(errorMessage);
         
       } catch (error) {
-        console.error('Error in editQuestion:', error);
         let errorMessage = 'Failed to load question for editing';
         
         if (error && typeof error === 'object') {
@@ -358,7 +404,6 @@ export default {
           }
         }
         
-        console.error('Error details:', { error, message: errorMessage });
         this.$toast.error(errorMessage);
       } finally {
         this.loading = false;
