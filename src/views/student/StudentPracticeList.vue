@@ -340,21 +340,28 @@ export default {
       this.loadingAssigned = true;
       try {
         const token = localStorage.getItem('auth_token');
-        const res = await axios.get(`/student/assigned-assessments?page=${page}`, {
+        
+        // Fetch student's groups
+        const groupsRes = await axios.get('/student/groups', {
           headers: { Authorization: `Bearer ${token}` }
         });
+        const groups = groupsRes.data || [];
         
-        this.assignedAssessments = res.data.data || [];
-        // Update pagination info
-        this.assignedPagination = {
-          current_page: res.data.current_page,
-          last_page: res.data.last_page,
-          per_page: res.data.per_page,
-          total: res.data.total,
-          from: res.data.from,
-          to: res.data.to,
-          links: res.data.links || []
-        };
+        // Fetch assignments from all groups
+        const allAssignments = [];
+        for (const group of groups) {
+          try {
+            const res = await axios.get(`/groups/${group.id}/assignments`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            allAssignments.push(...(res.data || []));
+          } catch (e) {
+            // Ignore errors for individual groups
+          }
+        }
+        
+        this.assignedAssessments = allAssignments;
+        
       } catch (err) {
         this.message = err.response?.data?.message || 'Failed to load assigned assessments.';
       } finally {
@@ -441,7 +448,7 @@ export default {
         } else if (status === 'in_progress' || status === 'pending') {
           // For in-progress or pending practice assessments, go to practice session
           this.$router.push({ 
-            name: 'PracticeSession', 
+            name: 'AssessmentSession', 
             params: { id: assessment.id } 
           });
         } else {

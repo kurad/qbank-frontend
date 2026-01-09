@@ -15,10 +15,14 @@ import LandingPage from "../LandingPage.vue";
 import BulkQuestionCreator from "@/components/BulkQuestionCreator.vue";
 
 const routes = [
-  {path: "/login", name: "login", component: StudentLogin, },
-  {path: "/register", name: "register", component: StudentRegister, },
-  {path: "/", name: "home", component: LandingPage, },
-  {path: "/auth/callback", name: "authCallback", component: () => import("@/views/student/AuthCallback.vue"),},
+  { path: "/login", name: "login", component: StudentLogin },
+  { path: "/register", name: "register", component: StudentRegister },
+  { path: "/", name: "home", component: LandingPage },
+  {
+    path: "/auth/callback",
+    name: "authCallback",
+    component: () => import("@/views/student/AuthCallback.vue"),
+  },
 
   // --------------- Student Routes ----------------
   {
@@ -47,6 +51,11 @@ const routes = [
         component: PracticeSession,
       },
       {
+        path: "assessment-session/:id", // ✅ /practice/assessment-session/:id
+        name: "AssessmentSession",
+        component: () => import("@/views/student/AssessmentSession.vue"),
+      },
+      {
         path: "practice-list", // ✅ /practice/practice-list
         name: "StudentPracticeList",
         component: () => import("@/views/student/StudentPracticeList.vue"),
@@ -55,6 +64,12 @@ const routes = [
         path: "assessment-results/:id", // ✅ /practice/assessment-results/:id
         name: "AssessmentResults",
         component: () => import("@/views/student/AssessmentResults.vue"),
+      },
+      {
+        path: "group/:id",
+        name: "student-group",
+        component: () => import("@/views/student/StudentGroup.vue"),
+        props: true,
       },
     ],
   },
@@ -66,7 +81,7 @@ const routes = [
     meta: { requiresAuth: true, role: "teacher" },
     children: [
       {
-        path: "questions", // ✅ /teacher/questions 
+        path: "questions", // ✅ /teacher/questions
         name: "questions",
         component: QuestionsList,
       },
@@ -85,18 +100,15 @@ const routes = [
         name: "type-question",
         component: Question,
       },
-      // {
-      //   path: "create-assessment", // ✅ /teacher/create-assessment 
-      //   name: "create-assessment",
-      //   component: () => import("@/views/teacher/CreateAssessment.vue"),
-      // },
+
       {
-        path: "create-assessment", // ✅ /teacher/create-assessment 
+        path: "create-assessment", // ✅ /teacher/create-assessment
         name: "create-assessment",
-        component: () => import("@/components/assessment/AssessmentBuilder.vue"),
+        component: () =>
+          import("@/components/assessment/AssessmentBuilder.vue"),
       },
       {
-        path: "assessment/:id/edit", 
+        path: "assessment/:id/edit",
         name: "assessment-edit",
         component: () => import("@/components/assessment/AssessmentEditor.vue"),
       },
@@ -128,14 +140,14 @@ const routes = [
         props: true,
       },
       {
-        path: 'groups',
-        name: 'groups',
-        component: () => import('@/views/teacher/GroupManager.vue'),
+        path: "groups",
+        name: "groups",
+        component: () => import("@/views/teacher/GroupManager.vue"),
       },
       {
-        path: 'groups/:id',
-        name: 'group-details',
-        component: () => import('@/views/teacher/GroupDetails.vue'),
+        path: "groups/:id",
+        name: "group-details",
+        component: () => import("@/views/teacher/GroupDetails.vue"),
         props: true,
       },
     ],
@@ -183,46 +195,46 @@ const router = createRouter({
 });
 
 router.beforeEach(async (to, from, next) => {
- const requiresAuth = to.matched.some((record) => record.meta.requiresAuth);
- const requiredRole = to.meta.role;
- // If route does not require authentication -> allow immediately
- 
- if (!requiresAuth) {
-  return next();
- }
- // Check authentication from backend (via Sunctum)
- const auth = await checkAuth();
- //Not authenticated -> redirect globally to login
+  const requiresAuth = to.matched.some((record) => record.meta.requiresAuth);
+  const requiredRole = to.meta.role;
+  // If route does not require authentication -> allow immediately
 
- if(!auth.isAuthenticated){
-  return next({
-    name: "login",
-    query: { redirect: to.fullPath }, // Optional: return user to intended page
-  });
- }
- // Authenticated but trying to access a different role's area
- if(requiredRole && requiredRole !== auth.role) {
-  // Redirect based on actual role
-  if(auth.role === "student"){
+  if (!requiresAuth) {
+    return next();
+  }
+  // Check authentication from backend (via Sunctum)
+  const auth = await checkAuth();
+  //Not authenticated -> redirect globally to login
+
+  if (!auth.isAuthenticated) {
     return next({
-      name: "studentDashboard",
-    });
-  }else if(auth.role === "teacher"){
-    return next({
-      name: "teacherDashboard",
-    });
-  }else if(auth.role === "admin"){
-    return next({
-      name: "AdminDashboard",
+      name: "login",
+      query: { redirect: to.fullPath }, // Optional: return user to intended page
     });
   }
-  // Fallback
-  return next({
-    name: "login",
-  });
- }
- // Authenticated and trying to access correct role's area
- return next();
+  // Authenticated but trying to access a different role's area
+  if (requiredRole && requiredRole !== auth.role) {
+    // Redirect based on actual role
+    if (auth.role === "student") {
+      return next({
+        name: "studentDashboard",
+      });
+    } else if (auth.role === "teacher") {
+      return next({
+        name: "teacherDashboard",
+      });
+    } else if (auth.role === "admin") {
+      return next({
+        name: "AdminDashboard",
+      });
+    }
+    // Fallback
+    return next({
+      name: "login",
+    });
+  }
+  // Authenticated and trying to access correct role's area
+  return next();
 });
 
 export default router;

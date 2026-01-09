@@ -126,7 +126,7 @@ export default {
         this.redirectByRole(res.data?.user_role || localStorage.getItem('user_role'));
       } catch (err) {
         this.success = false;
-        this.message = err.response?.data?.message || 'Login failed.';
+        this.message = err.response?.data?.message || 'Login failed.', err;
       } finally {
         this.loading = false;
       }

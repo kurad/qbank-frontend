@@ -43,23 +43,26 @@
           </div>
 
           <div
-            v-for="(q, qIndex) in [pages[currentPageIndex].parent, ...pages[currentPageIndex].subs]"
+            v-for="(q, qIndex) in [
+              pages[currentPageIndex].parent,
+              ...pages[currentPageIndex].subs,
+            ]"
             :key="q.id"
             class="mb-4"
           >
-
             <!-- Question Text -->
             <div class="question-text mb-3 p-3 rounded shadow-sm">
               <span class="question-number fw-bold">
-                {{ q.is_sub ? String.fromCharCode(97 + (qIndex - 1)) : (currentPageIndex + 1) }}.
+                {{
+                  q.is_sub
+                    ? String.fromCharCode(97 + (qIndex - 1))
+                    : currentPageIndex + 1
+                }}.
               </span>
               <span v-html="renderMath(q.question_text, q.is_math)"></span>
             </div>
             <!-- Question Image -->
-            <div
-              v-if="q.question_image_url"
-              class="text-center mb-3"
-            >
+            <div v-if="q.question_image_url" class="text-center mb-3">
               <img
                 :src="q.question_image_url"
                 alt="Question Image"
@@ -87,7 +90,9 @@
                 />
                 <label
                   class="option-item p-2 bg-white rounded-3 shadow-sm d-flex align-items-start gap-3"
-                  :class="{ active: answers[currentPageIndex][qIndex] === option.text }"
+                  :class="{
+                    active: answers[currentPageIndex][qIndex] === option.text,
+                  }"
                   :for="'opt-' + q.id + '-' + i"
                 >
                   <span class="option-letter">{{
@@ -95,9 +100,7 @@
                   }}</span>
                   <span
                     class="option-content"
-                    v-html="
-                      renderMath(option.text, q.is_math)
-                    "
+                    v-html="renderMath(option.text, q.is_math)"
                   ></span>
                   <img
                     v-if="option.image"
@@ -114,7 +117,11 @@
                 v-else-if="q.question_type === 'true_false'"
                 class="d-flex flex-column gap-2"
               >
-                <div v-for="(opt, i) in ['True', 'False']" :key="i" class="mb-2">
+                <div
+                  v-for="(opt, i) in ['True', 'False']"
+                  :key="i"
+                  class="mb-2"
+                >
                   <input
                     class="visually-hidden"
                     type="radio"
@@ -125,7 +132,9 @@
                   />
                   <label
                     class="option-item p-2 bg-white rounded-3 shadow-sm d-flex align-items-center gap-3 fw-semibold"
-                    :class="{ active: answers[currentPageIndex][qIndex] === opt }"
+                    :class="{
+                      active: answers[currentPageIndex][qIndex] === opt,
+                    }"
                     :for="'tf-' + q.id + '-' + i"
                   >
                     <span class="option-letter">{{ opt.charAt(0) }}</span>
@@ -135,10 +144,7 @@
               </div>
 
               <!-- Short Answer -->
-              <div
-                v-else-if="q.question_type === 'short_answer'"
-                class="mt-3"
-              >
+              <div v-else-if="q.question_type === 'short_answer'" class="mt-3">
                 <textarea
                   v-model="answers[currentPageIndex][qIndex]"
                   class="form-control shadow-sm"
@@ -148,10 +154,7 @@
               </div>
 
               <!-- Matching -->
-              <div
-                v-else-if="q.question_type === 'matching'"
-                class="mt-3"
-              >
+              <div v-else-if="q.question_type === 'matching'" class="mt-3">
                 <div
                   v-for="(pair, i) in q.options.left"
                   :key="i"
@@ -228,7 +231,7 @@ import katex from "katex";
 import "katex/dist/katex.min.css";
 
 export default {
-  name: "PracticeSession",
+  name: "AssessmentSession",
   data() {
     return {
       assessment: null,
@@ -274,11 +277,13 @@ export default {
       this.questions = this.flattenQuestions(questions);
       this.pages = this.groupQuestionsForWizard(questions);
 
-      this.answers = this.pages.map(page => {
+      this.answers = this.pages.map((page) => {
         const questionsOnPage = [page.parent, ...page.subs];
-        return questionsOnPage.map(q =>
+        return questionsOnPage.map((q) =>
           q.question_type === "matching"
-            ? Array((q.options && q.options.left && q.options.left.length) || 0).fill("")
+            ? Array(
+                (q.options && q.options.left && q.options.left.length) || 0
+              ).fill("")
             : null
         );
       });
@@ -361,20 +366,13 @@ export default {
           pages.push(page);
         }
 
-        page.subs.push(
-          this.normalizeQuestion(q, q.id, true, parent.id)
-        );
+        page.subs.push(this.normalizeQuestion(q, q.id, true, parent.id));
       });
 
       return pages;
     },
 
-    normalizeQuestion(
-      qObj,
-      questionId,
-      isSub = false,
-      parentId = null
-    ) {
+    normalizeQuestion(qObj, questionId, isSub = false, parentId = null) {
       const isMath = !!qObj.is_math;
       let options = qObj.options;
 
@@ -442,11 +440,16 @@ export default {
     },
     nextPage() {
       if (this.allAnsweredOnPage(this.currentPageIndex)) {
-        if (this.currentPageIndex < this.pages.length - 1) this.currentPageIndex++;
+        if (this.currentPageIndex < this.pages.length - 1)
+          this.currentPageIndex++;
       } else {
         const hasSubs = this.pages[this.currentPageIndex].subs.length > 0;
-        this.message = hasSubs ? "Please answer all sub-questions on this page." : "Please answer the question on this page.";
-        setTimeout(() => { this.message = ""; }, 3000);
+        this.message = hasSubs
+          ? "Please answer all sub-questions on this page."
+          : "Please answer the question on this page.";
+        setTimeout(() => {
+          this.message = "";
+        }, 3000);
       }
     },
     allAnsweredOnPage(pageIndex) {
@@ -459,20 +462,20 @@ export default {
         const subsQuestions = page.subs;
         return subsAnswers.every((ans, i) => {
           const q = subsQuestions[i];
-          if (q.question_type === 'matching') {
-            return ans.every(a => a !== '');
+          if (q.question_type === "matching") {
+            return ans.every((a) => a !== "");
           } else {
-            return ans !== null && ans !== '';
+            return ans !== null && ans !== "";
           }
         });
       } else {
         // Check parent question
         const ans = pageAnswers[0];
         const q = page.parent;
-        if (q.question_type === 'matching') {
-          return ans.every(a => a !== '');
+        if (q.question_type === "matching") {
+          return ans.every((a) => a !== "");
         } else {
-          return ans !== null && ans !== '';
+          return ans !== null && ans !== "";
         }
       }
     },
@@ -526,80 +529,90 @@ export default {
       this.message = "";
       const token = localStorage.getItem("auth_token");
 
-      try {
-        if (!this.studentAssessmentId) {
-          // Try to create student assessment or proceed
-          // For now, proceed if backend handles
+      // Helper to normalize answers based on question type
+      const normalizeAnswer = (question, userAnswer) => {
+        const type = question.question_type;
+
+        if (type === "matching") {
+          const left = question.options?.left || [];
+          const right = question.options?.right || [];
+          const leftLen = left.length;
+          const selections = Array.isArray(userAnswer)
+            ? userAnswer.slice(0, leftLen)
+            : [];
+          while (selections.length < leftLen) selections.push("");
+
+          const pairs = selections.map((sel, idx) => {
+            if (sel === "" || sel == null) {
+              return { left_index: idx, right_index: null };
+            }
+            const rightIndex = right.findIndex((r) => r === sel);
+            return { left_index: idx, right_index: rightIndex >= 0 ? rightIndex : null };
+          });
+
+          return { pairs, raw: left };
+        } else if (type === "true_false") {
+          let val = userAnswer != null ? String(userAnswer).toLowerCase() : "";
+          if (val !== "true" && val !== "false") val = "";
+          return val;
+        } else if (type === "short_answer") {
+          return userAnswer != null ? String(userAnswer).trim() : "";
+        } else {
+          // multiple_choice or other types default to string
+          return userAnswer != null ? String(userAnswer) : "";
         }
-        // Build answers array
+      };
+
+      try {
         const answersPayload = [];
+
         this.pages.forEach((page, pageIdx) => {
-          if (page.subs.length > 0) {
-            // Send only sub-questions
+          if (page.subs?.length > 0) {
             page.subs.forEach((q, qIdx) => {
               const userAnswer = this.answers[pageIdx][qIdx + 1];
-              const type = q.question_type;
-
-              // Normalize per type
-              if (type === "matching") {
-                const leftLen = (q.options && q.options.left && q.options.left.length) || 0;
-                let arr = Array.isArray(userAnswer) ? userAnswer.slice(0, leftLen) : [];
-                while (arr.length < leftLen) arr.push("");
-                answersPayload.push({
-                  question_id: q.question_id || q.id,
-                  answer: arr,
-                });
-              } else if (type === "true_false") {
-                let val = userAnswer != null ? String(userAnswer).toLowerCase() : "";
-                if (val !== "true" && val !== "false") val = "";
-                answersPayload.push({ question_id: q.question_id || q.id, answer: val });
-              } else if (type === "short_answer") {
-                const val = userAnswer != null ? String(userAnswer).trim() : "";
-                answersPayload.push({ question_id: q.question_id || q.id, answer: val });
-              } else {
-                // multiple_choice or others default to string
-                const val = userAnswer != null ? String(userAnswer) : "";
-                answersPayload.push({ question_id: q.question_id || q.id, answer: val });
-              }
-            });
-          } else {
-            // Send parent question
-            const q = page.parent;
-            const userAnswer = this.answers[pageIdx][0];
-            const type = q.question_type;
-
-            if (type === "matching") {
-              const leftLen = (q.options && q.options.left && q.options.left.length) || 0;
-              let arr = Array.isArray(userAnswer) ? userAnswer.slice(0, leftLen) : [];
-              while (arr.length < leftLen) arr.push("");
               answersPayload.push({
                 question_id: q.question_id || q.id,
-                answer: arr,
+                answer: normalizeAnswer(q, userAnswer),
               });
-            } else if (type === "true_false") {
-              let val = userAnswer != null ? String(userAnswer).toLowerCase() : "";
-              if (val !== "true" && val !== "false") val = "";
-              answersPayload.push({ question_id: q.question_id || q.id, answer: val });
-            } else if (type === "short_answer") {
-              const val = userAnswer != null ? String(userAnswer).trim() : "";
-              answersPayload.push({ question_id: q.question_id || q.id, answer: val });
-            } else {
-              // multiple_choice or others default to string
-              const val = userAnswer != null ? String(userAnswer) : "";
-              answersPayload.push({ question_id: q.question_id || q.id, answer: val });
-            }
+            });
+          } else {
+            const q = page.parent;
+            const userAnswer = this.answers[pageIdx][0];
+            answersPayload.push({
+              question_id: q.question_id || q.id,
+              answer: normalizeAnswer(q, userAnswer),
+            });
           }
         });
+
         const payload = {
-          student_assessment_id: this.studentAssessmentId || this.assessment.id,
+          assessment_id: this.assessment.id,
           answers: answersPayload,
         };
-        await axios.post("/assessments/submit-answers", payload, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+
+        const response = await axios.post(
+          "/assessments/submit-answers",
+          payload,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            transformResponse: [
+              (data) => {
+                try {
+                  return JSON.parse(data);
+                } catch {
+                  return data; // keep raw text if not JSON
+                }
+              },
+            ],
+          }
+        );
 
         this.submitSuccess = true;
-        this.message = "Answers submitted successfully!";
+        this.message =
+          typeof response.data === "string"
+            ? response.data
+            : response.data.message || "Answers submitted successfully!";
+
         setTimeout(() => {
           this.$router.push({
             name: "StudentPracticeList",
@@ -608,8 +621,16 @@ export default {
         }, 1200);
       } catch (err) {
         this.submitSuccess = false;
-        this.message =
-          err.response?.data?.message || "Submission failed. Try again.";
+
+        if (err.response) {
+          // Handle JSON or plain text response
+          const data = err.response.data;
+          this.message =
+            (typeof data === "string" ? data : data.message) ||
+            "Submission failed. Try again.";
+        } else {
+          this.message = err.message || "Submission failed. Try again.";
+        }
       } finally {
         this.submitting = false;
       }

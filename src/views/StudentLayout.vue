@@ -17,6 +17,9 @@
             <li class="nav-item">
               <a class="nav-link" href="#">Profile</a>
             </li>
+            <li class="nav-item">
+              <a class="nav-link" href="#" @click.prevent="showJoinModal = true">Join a Class</a>
+            </li>
           </ul>
           <div class="navbar-nav ms-auto">
             <span class="nav-item nav-link d-flex align-items-center">
@@ -46,6 +49,17 @@
             <a href="#" class="nav-link fw-semibold rounded-pill px-3 py-2">Settings</a>
           </li>
         </ul>
+
+        <!-- My Classes -->
+        <div class="mt-4 px-3">
+          <h6 class="text-muted fw-bold mb-2">My Classes</h6>
+          <ul class="list-unstyled">
+            <li v-for="group in groups" :key="group.id" class="mb-1">
+              <router-link :to="{ name: 'student-group', params: { id: group.id } }" class="text-decoration-none small fw-semibold text-primary">{{ group.group_name }}</router-link>
+            </li>
+            <li v-if="groups.length === 0" class="text-muted small">No classes joined yet.</li>
+          </ul>
+        </div>
       </aside>
       <main class="flex-grow-1 p-4">
         <div class="container-fluid">
@@ -53,6 +67,38 @@
         </div>
       </main>
     </div>
+
+    <!-- Join Class Modal -->
+    <div v-if="showJoinModal" class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Join Class</h5>
+            <button type="button" class="btn-close" @click="closeJoinModal"></button>
+          </div>
+          <div class="modal-body">
+            <form @submit.prevent="joinClass">
+              <div class="mb-3">
+                <label for="classCode" class="form-label">Enter Class Code</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="classCode"
+                  v-model="classCode"
+                  placeholder="Enter the class code"
+                  required
+                >
+              </div>
+              <button type="submit" class="btn btn-primary" :disabled="joining">Join Class</button>
+            </form>
+            <div v-if="joinMessage" class="mt-3 alert" :class="joinSuccess ? 'alert-success' : 'alert-danger'">
+              {{ joinMessage }}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -62,7 +108,65 @@ import axios from 'axios';
 
 export default {
   name: 'StudentLayout',
+  data() {
+    return {
+      showJoinModal: false,
+      classCode: '',
+      joining: false,
+      joinMessage: '',
+      joinSuccess: false,
+      groups: [],
+    };
+  },
+  async created() {
+    await this.loadGroups();
+  },
   methods: {
+    async loadGroups() {
+      try {
+        const token = localStorage.getItem('auth_token');
+        const response = await axios.get('/my-groups', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        this.groups = response.data || [];
+      } catch (err) {
+        console.error('Failed to load groups:', err);
+        this.groups = [];
+      }
+    },
+
+    closeJoinModal() {
+      this.showJoinModal = false;
+      this.classCode = '';
+      this.joinMessage = '';
+      this.joinSuccess = false;
+    },
+
+    async joinClass() {
+      this.joining = true;
+      this.joinMessage = '';
+      try {
+        const token = localStorage.getItem('auth_token');
+        const response = await axios.post('/groups/join', {
+          class_code: this.classCode
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        this.joinSuccess = true;
+        this.joinMessage = response.data.message;
+        // Reload groups
+        await this.loadGroups();
+        setTimeout(() => {
+          this.closeJoinModal();
+        }, 2000);
+      } catch (err) {
+        this.joinSuccess = false;
+        this.joinMessage = err.response?.data?.message || 'Failed to join class.';
+      } finally {
+        this.joining = false;
+      }
+    },
+
     async logout() {
       const token = localStorage.getItem('auth_token');
       try {

@@ -1,169 +1,249 @@
 <template>
   <div class="container py-4">
-    <div class="card shadow-lg border-0 mt-2" style="border-radius: 1.5em; background: linear-gradient(120deg, #f0f4ff 0%, #e0e7ff 100%);">
-      <div class="card-body" style="border-radius: 1.5em;">
+    <div class="card shadow-lg border-0 mt-2 main-card">
+      <div class="card-body">
+
         <!-- Header -->
-        <div class="d-flex justify-content-between align-items-center mb-4"
-             style="background: linear-gradient(90deg, #6366f1 0%, #60a5fa 100%);
-                    padding: 1.5rem;
-                    border-radius: 1em;
-                    box-shadow: 0 2px 12px rgba(60,72,88,0.07);">
-          <button class="btn btn-outline-light btn-sm me-3" @click="$router.go(-1)">
+        <div class="header-bar">
+          <button class="btn btn-outline-light btn-sm" @click="$router.go(-1)">
             <i class="bi bi-arrow-left"></i> Back
           </button>
-          <h2 class="card-title text-center fw-bold" style="color: #ffffff;font-size: 2.2em; letter-spacing: 1px; margin-bottom: 1.5rem; font-family: 'Poppins', sans-serif; text-transform: uppercase; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">
-            Assessment Results
-          </h2>
+          <h2 class="header-title">Assessment Results</h2>
         </div>
 
         <!-- Loading / Error -->
-        <div v-if="loading" class="d-flex flex-column align-items-center justify-content-center py-5">
-          <div class="spinner-border text-primary mb-3" role="status"></div>
-          <div class="text-primary">Loading results...</div>
+        <div v-if="loading" class="text-center py-5">
+          <div class="spinner-border text-primary mb-3"></div>
+          <div>Loading results...</div>
         </div>
-        <div v-else-if="error" class="alert alert-danger py-2 text-center">{{ error }}</div>
+
+        <div v-else-if="error" class="alert alert-danger text-center">
+          {{ error }}
+        </div>
 
         <!-- Results -->
         <div v-else-if="results">
+
           <!-- Summary -->
-          <div class="mb-4 pb-3 border-bottom"
-               style="background: linear-gradient(90deg, #6366f1 0%, #60a5fa 100%);
-                      padding: 1.5rem; border-radius: 1em; box-shadow: 0 2px 12px rgba(60,72,88,0.07);">
-            <h3 class="h4 mb-2 text-white fw-bold">
+          <div class="summary-card">
+            <h4 class="text-white fw-bold mb-2">
               <i class="bi bi-journal-check me-2"></i>{{ results.assessment_title }}
-            </h3>
-            <div class="row mb-2 text-white">
-              <div class="col-md-4 mb-1"><strong>Type:</strong> <span class="badge bg-light text-primary fw-semibold">{{ results.assessment_type }}</span></div>
-              <div class="col-md-4 mb-1"><strong>Score:</strong> <span class="badge bg-success fw-semibold"><i class="bi bi-star-fill me-1"></i>{{ results.score }} / {{ results.max_score }}</span></div>
-              <div class="col-md-4 mb-1"><strong>Percentage:</strong> <span class="badge bg-info text-dark fw-semibold"><i class="bi bi-percent me-1"></i>{{ results.percentage.toFixed(2) }}%</span></div>
-            </div>
-            <div class="row mb-2 text-white">
-              <div class="col-md-6 mb-1"><strong>Completed At:</strong> <span class="badge bg-light text-primary fw-semibold">{{ formatDate(results.completed_at) }}</span></div>
+            </h4>
+            <div class="row text-white">
+              <div class="col-md-4">
+                <strong>Type: </strong>
+                <span class="badge bg-light text-primary">{{ results.assessment_type.charAt(0).toUpperCase() + results.assessment_type.slice(1) }}</span>
+              </div>
+              <div class="col-md-4">
+                <strong>Score: </strong>
+                <span class="badge bg-success">{{ results.score }} / {{ results.max_score }}</span>
+              </div>
+              <div class="col-md-4">
+                <strong>Percentage: </strong>
+                <span class="badge bg-info text-dark">
+                  {{ results.percentage.toFixed(2) }}%
+                </span>
+              </div>
             </div>
           </div>
 
           <!-- Questions -->
-          <div class="mb-3">
-            <h3 class="h5 mb-3 text-primary fw-bold"><i class="bi bi-list-check me-2"></i>Questions Review</h3>
+          <h5 class="mt-4 mb-3 text-primary fw-bold">
+            <i class="bi bi-list-check me-2"></i>Questions Review
+          </h5>
 
-            <div v-for="(question, index) in results.questions" :key="index" class="mb-4">
-              <div class="card border-0 shadow-sm" style="border-radius: 1em; background: #f9fafb;">
-                <div class="card-body">
-                  <div class="d-flex align-items-center mb-2">
-                    <span class="badge bg-primary me-2" style="font-size: 1.1em;">Q{{ index + 1 }}</span>
-                    <span class="fw-bold" style="font-size: 1.1em; color: #374151;" v-html="renderMath(question.question_text)"></span>
-                  </div>
+          <div
+            v-for="(question, index) in results.questions"
+            :key="question.id"
+            class="mb-4"
+          >
+            <div class="card border-0 shadow-sm question-card">
+              <div class="card-body">
 
-                  <!-- Question Type & Answer -->
-                  <div class="mb-2">
-                    <span class="badge bg-light text-dark me-2">{{ formatQuestionType(question.question_type) }}</span>
-
-                    <!-- Matching -->
-                    <template v-if="question.question_type === 'matching'">
-                      <div class="d-flex gap-3 mt-2">
-                        <div v-for="(left, i) in question.options.left" :key="'left-'+i" style="flex: 1;">
-                          <div class="mb-1 p-2 rounded bg-gray-100">{{ left }}</div>
-                        </div>
-                        <div v-for="(right, i) in question.options.right" :key="'right-'+i" style="flex: 1;">
-                          <div class="mb-1 p-2 rounded" :style="matchingStyle(i, question)">{{ right }}</div>
-                        </div>
-                      </div>
-                    </template>
-
-                    <!-- Other question types -->
-                    <template v-else>
-                      <!-- Short Answer - Display in formatted boxes -->
-                      <template v-if="question.question_type === 'short_answer'">
-                        <div class="mt-3">
-                          <div class="mb-3">
-                            <strong class="d-block mb-2 text-secondary">
-                              <i class="bi bi-pencil-square me-1"></i>Your Answer:
-                            </strong>
-                            <div class="answer-box" :class="question.is_correct ? 'border-success' : 'border-danger'">
-                              <!-- Check if student answer is an image -->
-                              <template v-if="isImageUrl(question.student_answer)">
-                                <img :src="question.student_answer"
-                                     alt="Student Answer"
-                                     class="answer-image"
-                                     @error="handleImageError($event, 'student')" />
-                              </template>
-                              <template v-else>
-                                <span v-html="question.student_answer ? renderMath(question.student_answer) : 'No Answer'"></span>
-                              </template>
-                            </div>
-                          </div>
-                          <div class="mb-2" v-if="question.correct_answer">
-                            <strong class="d-block mb-2 text-success">
-                              <i class="bi bi-check-circle me-1"></i>Correct Answer:
-                            </strong>
-                            <div class="answer-box border-success bg-light">
-                              <!-- Check if correct answer is an image -->
-                              <template v-if="isImageUrl(question.correct_answer)">
-                                <img :src="question.correct_answer"
-                                     alt="Correct Answer"
-                                     class="answer-image"
-                                     @error="handleImageError($event, 'correct')" />
-                              </template>
-                              <template v-else>
-                                <span v-html="renderMath(question.correct_answer)"></span>
-                              </template>
-                            </div>
-                          </div>
-                        </div>
-                      </template>
-                      <!-- Other question types - Display in badges -->
-                      <template v-else>
-                        <span class="badge me-2" :class="question.is_correct ? 'bg-success' : 'bg-danger'">
-                          Your Answer:
-                          <strong v-html="question.student_answer ? renderMath(`$${question.student_answer}$`) : 'No Answer' "></strong>
-                        </span>
-                      </template>
-                      <!-- Show confidence selector for short_answer question -->
-                       <div v-if="question.question_type === 'short_answer' && !question.is_correct">
-                        <div class="d-flex align-items-center mb-2 mt-2">
-                          <span class="me-2 fw-semibold">Confidence in your answer:</span>
-                          <div class="btn-group btn-group-sm">
-                            <button v-for="level in confidenceLevels" :key="level.value"
-                               class="btn"
-                               :class="{
-                                'btn-outline-primary': question.confidence_score !== level.value ?
-                                'btn-primary': question.confidence_score === level.value,
-                                'disabled': question.is_correct !== null
-                               }"
-                               @click="updateConfidence(question, level.value, index)"
-                               :disabled="question.is_correct !== null"
-                               >
-                               {{ level.label }}
-                              </button>
-                          </div>
-                        </div>
-                        <small class="text-muted" v-if="question.is_correct === null">Select how confident you were in your answer</small>
-                        <small class="text-success" v-else>
-                          <i class="bi bi-check-circle-fill"></i> Graded
-                        </small>
-                       </div>
-                      <span v-else-if="question.is_correct" class="badge bg-success">
-                        <i class="bi bi-check-circle me-1"></i>Correct</span>
-                      <span v-else class="badge bg-danger">
-                        <i class="bi bi-x-circle me-1"></i>Incorrect</span>
-                    </template>
-                  </div>
-
-                  <!-- Points -->
-                  <div class="mb-2">
-                    <span class="badge bg-warning me-2">Points: <strong>{{ question.points_earned }} / {{ question.max_points }}</strong></span>
-                  </div>
-
-                  <!-- Explanation -->
-                  <div v-if="question.explanation" class="alert alert-info mt-2 mb-0 py-2 px-3" style="border-radius: 0.7em;">
-                    <strong><i class="bi bi-info-circle me-1"></i>Explanation:</strong>
-                    <span>{{ question.explanation }}</span>
-                  </div>
+                <!-- Question -->
+                <div class="mb-2">
+                  <span class="badge bg-primary me-2">Q{{ index + 1 }}</span>
+                  <span class="fw-bold" v-html="renderMath(question.question_text)"></span>
                 </div>
+
+                <span class="badge bg-light text-dark mb-2">
+                  {{ formatQuestionType(question.question_type) }}
+                </span>
+
+                <!-- MATCHING -->
+                <template v-if="question.question_type === 'matching'">
+                  <div class="mt-2">
+                    <div
+                      v-for="(item, mi) in question.matchingDisplay"
+                      :key="mi"
+                      class="d-flex justify-content-between align-items-center p-2 mb-2 rounded"
+                      :class="item.is_correct ? 'bg-success text-white' : 'bg-danger text-white'"
+                    >
+                      <div class="flex-fill">
+                        <strong>{{ item.left_text }}</strong>
+                      </div>
+                      <div class="mx-3">→</div>
+                      <div class="flex-fill text-end">
+                        <div>Your: <span class="fw-semibold">{{ item.student_right_text || 'No match' }}</span></div>
+                        <div v-if="item.correct_right_text" class="small">Correct: {{ item.correct_right_text }}</div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                </template>
+
+                <!-- MULTIPLE CHOICE -->
+                <template v-else-if="question.question_type === 'mcq'">
+                  <div class="mt-2">
+                    <div
+                      v-for="(opt, oi) in question.options"
+                      :key="oi"
+                      class="p-2 mb-2 bg-lightblue rounded option-row d-flex align-items-center"
+                      :class="{
+                        'selected': (typeof opt === 'string' ? opt : opt.text).toLowerCase() === String(question.student_answer).toLowerCase(),
+                        'correct': (typeof opt === 'string' ? opt : opt.text).toLowerCase() === String(question.correct_answer).toLowerCase()
+                      }"
+                    >
+                      <span class="option-letter me-3">{{ String.fromCharCode(65 + oi) }}</span>
+                      <div class="flex-fill">
+                        <template v-if="typeof opt === 'object' && (opt.image || opt.image_url)">
+                          <img :src="opt.image_url || opt.image" class="option-image mb-1" />
+                        </template>
+                        <div v-html="renderMath(typeof opt === 'string' ? opt : (opt.text || ''))"></div>
+                      </div>
+                      <div v-if="(typeof opt === 'string' ? opt : opt.text).toLowerCase() === String(question.correct_answer).toLowerCase()" class="ms-3">
+                        <span class="badge bg-success">Correct</span>
+                      </div>
+                      <div v-else-if="(typeof opt === 'string' ? opt : opt.text).toLowerCase() === String(question.student_answer).toLowerCase()" class="ms-3">
+                        <span class="badge bg-danger">Your answer</span>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+
+                <!-- TRUE/FALSE -->
+                <template v-else-if="question.question_type === 'true_false'">
+                  <div class="mt-2">
+                    <div
+                      v-for="(opt, oi) in [{text: 'True'}, {text: 'False'}]"
+                      :key="oi"
+                      class="p-2 mb-2 bg-white rounded option-row d-flex align-items-center"
+                      :class="{
+                        'selected': String(opt.text).toLowerCase() === String(question.student_answer).toLowerCase(),
+                        'correct': String(opt.text).toLowerCase() === String(question.correct_answer).toLowerCase()
+                      }"
+                    >
+                      <span class="option-letter me-3">{{ opt.text.charAt(0) }}</span>
+                      <div class="flex-fill">{{ opt.text }}</div>
+                      <div v-if="String(opt.text).toLowerCase() === String(question.correct_answer).toLowerCase()" class="ms-3">
+                        <span class="badge bg-success">Correct</span>
+                      </div>
+                      <div v-else-if="String(opt.text).toLowerCase() === String(question.student_answer).toLowerCase()" class="ms-3">
+                        <span class="badge bg-info">Your answer</span>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+
+                <!-- SHORT ANSWER -->
+                <template v-else-if="question.question_type === 'short_answer'">
+                  <div class="mt-3">
+
+                    <!-- Student Answer -->
+                    <strong>Your Answer:</strong>
+                    <div
+                      class="answer-box"
+                      :class="{
+                        'border-success': question._auto_marked || question.confidence_score === 3,
+                        'border-danger': question.confidence_score === 0
+                      }"
+                    >
+                      <template v-if="isImageUrl(question.student_answer)">
+                        <img :src="question.student_answer" class="answer-image" />
+                      </template>
+                      <template v-else>
+                        <span v-html="question.student_answer || 'No Answer'"></span>
+                      </template>
+                    </div>
+
+                    <!-- Correct Answer -->
+                    <div v-if="question.correct_answer || question.correct_answer_image" class="mt-3">
+                      <strong class="text-success">Correct Answer:</strong>
+                      <div class="answer-box border-success bg-light">
+                        <template v-if="question.correct_answer_image">
+                          <img :src="question.correct_answer_image" class="answer-image" />
+                        </template>
+                        <template v-else>
+                          <span v-html="question.correct_answer"></span>
+                        </template>
+                      </div>
+                    </div>
+
+                    <!-- Auto-marked -->
+                    <div v-if="question._auto_marked" class="mt-2">
+                      <span class="badge bg-success">
+                        <i class="bi bi-check-circle me-1"></i>Correct (Auto-marked)
+                      </span>
+                    </div>
+
+                    <!-- Confidence Selector (practice only) -->
+                    <div
+                      v-else-if="question.confidence_score === null && results.assessment_type === 'practice'"
+                      class="mt-3"
+                    >
+                      <strong class="me-2">Confidence:</strong>
+                      <div class="btn-group btn-group-sm">
+                        <button
+                          v-for="level in confidenceLevels"
+                          :key="level.value"
+                          class="btn btn-outline-primary"
+                          @click="updateConfidence(question, level.value)"
+                        >
+                          {{ level.label }}
+                        </button>
+                      </div>
+                      <small class="text-muted d-block mt-1">
+                        Select how confident you were
+                      </small>
+                    </div>
+
+                    <!-- Awarded -->
+                    <div v-if="question.confidence_score !== null" class="mt-2">
+                      <span class="badge bg-info">
+                        Awarded: {{ question.points_earned }} / {{ question.max_points }}
+                      </span>
+                      <span class="badge bg-secondary ms-2">Self-graded</span>
+                    </div>
+
+                  </div>
+                </template>
+
+                <!-- OTHER TYPES -->
+                <template v-else>
+                  <span
+                    class="badge"
+                    :class="question.is_correct ? 'bg-success' : 'bg-danger'"
+                  >
+                    Your Answer: {{ question.student_answer || 'No Answer' }}
+                  </span>
+                </template>
+
+                <!-- Points -->
+                <div class="mt-2">
+                  <span class="badge bg-warning">
+                    Points: {{ question.points_earned }} / {{ question.max_points }}
+                  </span>
+                </div>
+
+                <!-- Explanation -->
+                <div v-if="question.explanation" class="alert alert-info mt-3 py-2">
+                  <strong>Explanation:</strong> {{ question.explanation }}
+                </div>
+
               </div>
             </div>
-
           </div>
+
         </div>
       </div>
     </div>
@@ -177,217 +257,261 @@ import 'katex/dist/katex.min.css';
 
 export default {
   name: 'AssessmentResults',
+
   data() {
     return {
       results: null,
       loading: true,
       error: null,
       confidenceLevels: [
-        {value: 0, label: 'I was wrong'},
-        {value: 1, label: 'I was partially correct'},
-        {value: 3, label: 'I was mostly correct'},
-        {value: 4, label: 'I was correct'},
+        { value: 0, label: 'I was wrong' },
+        { value: 1, label: 'Partially correct' },
+        { value: 2, label: 'Mostly correct' },
+        { value: 3, label: 'Completely correct' }
       ]
     };
   },
+
   mounted() {
     this.fetchResults();
   },
-  computed: {
-    currentPercentage() {
-      if(!this.results) return 0;
-      return (this.results.score / this.results.max_score) * 100;
-    }
-  },
+
   methods: {
     async fetchResults() {
-      const assessmentId = this.$route.params.id;
       try {
-        const token = localStorage.getItem('auth_token');
-        const response = await axios.get(`/student/assessment-results/${assessmentId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const res = await axios.get(
+          `/student/assessment-results/${this.$route.params.id}`,
+          { headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` } }
+        );
 
-        // Handle matching questions
-        response.data.questions.forEach(q => {
+        this.results = res.data;
+
+        // Ensure top-level score uses API value (some APIs return `score` or `total_score`)
+        this.results.score = res.data.score ?? res.data.total_score ?? this.results.score;
+
+        // If API returns a separate `student_answers` collection, merge it into the
+        // corresponding question objects so UI shows persisted confidence/points.
+        if (Array.isArray(this.results.student_answers) && Array.isArray(this.results.questions)) {
+          const saMap = {};
+          this.results.student_answers.forEach(sa => {
+            if (sa.question_id !== undefined) saMap[sa.question_id] = sa;
+          });
+          this.results.questions.forEach(q => {
+            const sa = saMap[q.id] || saMap[q.question_id] || null;
+            if (sa) {
+              q.points_earned = sa.points_earned ?? q.points_earned ?? 0;
+              q.confidence_score = sa.confidence_score ?? sa.confidence ?? q.confidence_score ?? null;
+              q.max_points = sa.max_points ?? sa.marks ?? q.max_points ?? q.marks ?? 0;
+              q.student_assessment_id = sa.student_assessment_id ?? q.student_assessment_id;
+              if (sa.answer_text !== undefined) q.student_answer = sa.answer_text;
+            }
+          });
+        }
+
+        // Normalize per-question student-answer fields. Some backends return a nested
+        // student_answer object while others put fields at the question root. Merge
+        // any nested `student_answer` object into the question so the template can
+        // consistently read `points_earned`, `confidence_score`, `max_points`, etc.
+        this.results.questions.forEach(q => {
+          // If backend returned a JSON string for student_answer, attempt to parse it
+          let saObj = null;
+          if (q.student_answer && typeof q.student_answer === 'string') {
+            const s = q.student_answer.trim();
+            if ((s.startsWith('{') && s.endsWith('}')) || (s.startsWith('[') && s.endsWith(']'))) {
+              try {
+                saObj = JSON.parse(s);
+              } catch (e) {
+                saObj = null;
+              }
+            }
+          } else if (q.student_answer && typeof q.student_answer === 'object') {
+            saObj = q.student_answer;
+          }
+
+          if (saObj) {
+            q.points_earned = saObj.points_earned ?? q.points_earned ?? 0;
+            q.confidence_score = saObj.confidence_score ?? saObj.confidence ?? q.confidence_score ?? null;
+            q.max_points = saObj.max_points ?? saObj.marks ?? q.max_points ?? 0;
+            q.student_assessment_id = saObj.student_assessment_id ?? q.student_assessment_id;
+            if (saObj.answer_text !== undefined) q.student_answer = saObj.answer_text;
+          }
+
+          // fallback: if max_points still missing, try question-level field
+          q.max_points = q.max_points ?? q.marks ?? q.points_possible ?? 0;
+
           if (q.question_type === 'matching') {
-            const studentAns = JSON.parse(q.student_answer || '[]');
-            const correctAns = JSON.parse(q.correct_answer || '[]');
+            // Normalize stored student/correct answers which may be strings or objects
+            const parseMaybe = (v) => {
+              if (!v) return null;
+              if (typeof v === 'object') return v;
+              try {
+                return JSON.parse(v);
+              } catch (e) {
+                return null;
+              }
+            };
 
-            const left = [];
-            const right = [];
-            studentAns.forEach((item, i) => {
-              left.push(item);
-              const pair = correctAns.find(p => p.left_index === i);
-              right.push(pair ? studentAns[pair.right_index] : '');
+            const studentObj = parseMaybe(q.student_answer) || {};
+            const correctObj = parseMaybe(q.correct_answer) || {};
+
+            // Prefer the question's options for left/right display text when available
+            const leftItems = (q.options && Array.isArray(q.options.left) && q.options.left.length)
+              ? q.options.left
+              : (studentObj.raw || correctObj.raw || []);
+
+            const rightPool = (q.options && Array.isArray(q.options.right) && q.options.right.length)
+              ? q.options.right
+              : (correctObj.raw || studentObj.raw || []);
+
+            // studentObj/ correctObj might be an array of pairs directly, or an object { pairs: [...], raw: [...] }
+            const studentPairs = Array.isArray(studentObj)
+              ? studentObj
+              : (Array.isArray(studentObj.pairs) ? studentObj.pairs : (Array.isArray(q.student_answer_parsed) ? q.student_answer_parsed : []));
+
+            const correctPairs = Array.isArray(correctObj)
+              ? correctObj
+              : (Array.isArray(correctObj.pairs) ? correctObj.pairs : (Array.isArray(q.correct_answer_parsed) ? q.correct_answer_parsed : []));
+
+            // Build a display-friendly array per-left item
+            q.matchingDisplay = leftItems.map((leftText, idx) => {
+              const sp = studentPairs.find(p => p.left_index === idx) || { right_index: null };
+              const cp = correctPairs.find(p => p.left_index === idx) || { right_index: null };
+              return {
+                left_text: leftText,
+                student_right_index: sp.right_index,
+                correct_right_index: cp.right_index,
+                student_right_text: sp.right_index != null ? (rightPool[sp.right_index] ?? null) : null,
+                correct_right_text: cp.right_index != null ? (rightPool[cp.right_index] ?? null) : null,
+                is_correct: sp.right_index != null && cp.right_index === sp.right_index
+              };
             });
 
-            q.options = { left, right };
-            q.student_answer_parsed = studentAns;
-            q.correct_answer_parsed = correctAns;
+            // Ensure fallback options exist for templates that read q.options
+            q.options = q.options || {};
+            q.options.left = leftItems;
+            q.options.right = rightPool;
           }
         });
 
-        this.results = response.data;
-      } catch (err) {
-        this.error = err.response?.data?.message || 'Failed to load results.';
+        // If backend returned an inconsistent top-level score (stale), compute
+        // a client-side total from the question list so the UI reflects persisted
+        // per-question `points_earned` values.
+        try {
+          const computedScore = this.results.questions.reduce((sum, q) => {
+            return sum + (parseFloat(q.points_earned) || 0);
+          }, 0);
+
+          // compute max score from top-level or per-question values
+          const computedMax = (parseFloat(this.results.max_score) || 0) || this.results.questions.reduce((sum, q) => sum + (parseFloat(q.max_points) || 0), 0);
+
+          // If different, prefer the computed values (backend may be stale)
+          if (Math.abs(computedScore - (Number(this.results.score) || 0)) > 0.0001) {
+            this.results.score = Number(computedScore);
+            this.results.max_score = Number(computedMax || this.results.max_score || 0);
+            this.results.percentage = this.results.max_score ? (this.results.score / this.results.max_score) * 100 : 0;
+          }
+        } catch (e) {
+          // ignore computation errors and keep server values
+        }
+
+        this.autoMarkShortAnswers();
+      } catch {
+        this.error = 'Failed to load results.';
       } finally {
         this.loading = false;
       }
     },
-    async updateConfidence(question, confidenceScore, index) {
-      try {
-        const token = localStorage.getItem('auth_token');
-        const studentAssessmentId = this.studentAssessmentId || this.$route.params.id;
 
-        if (!studentAssessmentId) {
-      throw new Error('Student assessment ID is missing');
+    autoMarkShortAnswers() {
+  if (!this.results || !this.results.questions) return;
+
+  this.results.questions.forEach(async question => {
+    if (question.question_type !== 'short_answer') return;
+
+    // Always initialize explicitly
+    question._auto_marked = false;
+
+    // Only auto-mark if correct answer exists
+    if (
+      question.correct_answer &&
+      this.isExactMatch(question)
+    ) {
+      question._auto_marked = true;
+      // Auto-save full marks using backend's max mapping (3 == full)
+      await this.updateConfidence(question, 3, true);
     }
-        const response = await axios.post('/assessments/update-short-answer-confidence', {
-          student_assessment_id: studentAssessmentId,
-          question_id: question.id || question.question_id,
-          confidence_score: confidenceScore
+  });
+},
+
+
+ isExactMatch(question) {
+  if (question.question_type !== 'short_answer') return false;
+  if (
+    !question.student_answer ||
+    !question.correct_answer
+  ) {
+    return false;
+  }
+
+  return (
+    question.student_answer.trim().toLowerCase() ===
+    question.correct_answer.trim().toLowerCase()
+  );
+},
+
+
+    async updateConfidence(question, confidence, skipConfirm = false) {
+      if (!skipConfirm && confidence === 4 && !confirm('Are you sure you deserve full marks?')) return;
+
+      const res = await axios.post(
+        '/assessments/update-short-answer-confidence',
+        {
+          student_assessment_id: question.student_assessment_id,
+          question_id: question.question_id,
+          confidence_score: confidence
         },
-      {
-        headers: { Authorization: `Bearer ${token}`}
-      });
-      // Update the question with new confidence and points
-      question.confidence_score = confidenceScore;
-      question.points_earned = response.data.points_earned;
-      question.is_correct = response.data.is_correct;
+        { headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` } }
+      );
 
-
-      // Update the total score in the results
-      this.results.score = response.data.total_score;
-      this.results.max_score = response.data.max_score;
-      this.$forceUpdate();
-      if(this.$toast){
-              this.$toast.success('Points updated successfully!');
-
-      }else {
-        alert('Points updated successfully!');
-      }
-      } catch (error) {
-        console.error('Error updating points', error);
-    const errorMessage = error.response?.data?.message || 'Failed to update confidence level.';
-    if (this.$toast) {
-      this.$toast.error(errorMessage);
-    } else {
-      alert('Error: ' + errorMessage);
-    }
-        }
+      question.confidence_score = confidence;
+      question.points_earned = res.data.points_earned;
+      this.results.score = res.data.total_score;
     },
 
     renderMath(text) {
       if (!text) return '';
-      // Display math $$...$$
-      text = text.replace(/\$\$([^$]+)\$\$/g, (_, math) => {
-        try { return katex.renderToString(math, { displayMode: true, throwOnError: false }); }
-        catch (e) { console.error(e); return math; }
-      });
-      // Inline math $...$
-      text = text.replace(/\$(.+?)\$/g, (_, math) => {
-        try { return katex.renderToString(math, { displayMode: false, throwOnError: false }); }
-        catch (e) { console.error(e); return math; }
-      });
-      return text;
-    },
-
-    formatDate(dateString) {
-      return new Date(dateString).toLocaleString();
+      return text.replace(/\$(.+?)\$/g, (_, m) =>
+        katex.renderToString(m, { throwOnError: false })
+      );
     },
 
     formatQuestionType(type) {
-      return type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ');
+      return type.replace('_', ' ').toUpperCase();
     },
 
-    matchingStyle(index, question) {
-      const correctPair = question.correct_answer_parsed.find(p => p.left_index === index);
-      const isCorrect = correctPair && correctPair.right_index === index;
-      return `background: ${isCorrect ? '#d1fae5' : '#fee2e2'}; padding: 0.5rem; border-radius: 0.3rem;`;
-    },
+    
 
-    isImageUrl(text) {
-      if (!text || typeof text !== 'string') return false;
-      // Check if it's a URL pointing to an image
-      const imageExtensions = /\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i;
-      const isUrl = text.startsWith('http://') || text.startsWith('https://') || text.startsWith('/');
-      return isUrl && (imageExtensions.test(text) || text.includes('/uploads/') || text.includes('/images/'));
-    },
-
-    handleImageError(event, type) {
-      console.error(`Failed to load ${type} answer image:`, event.target.src);
-      event.target.style.display = 'none';
-      const errorMsg = document.createElement('div');
-      errorMsg.className = 'text-danger';
-      errorMsg.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>Image failed to load';
-      event.target.parentNode.appendChild(errorMsg);
+    isImageUrl(v) {
+      return typeof v === 'string' && /\.(png|jpg|jpeg|gif|webp)$/i.test(v);
     }
   }
 };
 </script>
 
 <style scoped>
-.card {
-  max-width: 900px;
-  margin: 0 auto;
-}
-.card-title {
-  font-weight: 700;
-}
-.badge {
-  font-size: 1em;
-}
-.answer-box {
-  background: #f8fafc;
-  border: 2px solid #e5e7eb;
-  border-radius: 0.6em;
-  padding: 1rem;
-  font-size: 0.95em;
-  color: #374151;
-  white-space: pre-wrap;   /* preserves new lines */
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-  line-height: 1.6;
-  min-height: 50px;
-  max-width: 100%;
-}
-
-.answer-box.border-success {
-  border-color: #10b981;
-  background: #f0fdf4;
-}
-
-.answer-box.border-danger {
-  border-color: #ef4444;
-  background: #fef2f2;
-}
-
-.answer-box.bg-light {
-  background: #f9fafb;
-}
-
-.answer-image {
-  max-width: 100%;
-  height: auto;
-  max-height: 500px;
-  border-radius: 0.5em;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  cursor: pointer;
-  display: block;
-  margin: 0 auto;
-  object-fit: contain;
-}
-
-.answer-image:hover {
-  transform: scale(1.02);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-}
-
-.btn-link {
-  text-decoration: none;
-  font-weight: 500;
-}
-
+.main-card { border-radius: 1.5em; background: #f9fafb; max-width: 900px; margin: auto; }
+.header-bar { display:flex; justify-content:space-between; align-items:center;
+  background:linear-gradient(90deg,#6366f1,#60a5fa); padding:1.2rem; border-radius:1em; }
+.header-title { color:#fff; font-weight:700; margin:0; }
+.summary-card { background:linear-gradient(90deg,#6366f1,#60a5fa);
+  padding:1.2rem; border-radius:1em; margin-bottom:1.5rem; }
+.question-card { border-radius:1em; background:#fff; }
+.answer-box { border:2px solid #e5e7eb; border-radius:.6em; padding:1rem; background:#f8fafc; }
+.border-success { border-color:#10b981; background:#f0fdf4; }
+.border-danger { border-color:#ef4444; background:#fef2f2; }
+.answer-image { max-width:100%; border-radius:.5em; }
+.option-image { max-width:140px; display:block; border-radius:.4em; }
+.option-row { border:1px solid #e7e7ef; }
+.option-row.selected { background: #f0f9ff; border-color:#c7e9ff; }
+.option-row.correct { background: #f0fdf4; border-color:#bbf7d0; }
 </style>

@@ -234,17 +234,14 @@ export default {
       type: '',
       subjectId: '',
       selectedTopicId: '',
-      gradeLevelId: '',
-      selectedStudentIds: [],
-      selectAllStudents: false,
+      selectedGroupId: '',
       startTime: '',
       endTime: '',
       isTimed: false,
       timeLimit: '',
       topics: [],
       subjects: [],
-      students: [],
-      gradeLevels: [],
+      groups: [],
       questionsByTopic: {}, // { topicId: [questions] }
       selectedQuestionIds: [],
       loading: false,
@@ -257,20 +254,21 @@ export default {
     onSubjectChange() {
       this.fetchTopics();
     },
-    async fetchGradeLevels() {
-      try {
-        const res = await axios.get('/grade-levels');
-        this.gradeLevels = res.data;
-      } catch (err) {
-        this.message = 'Failed to load grade levels.';
-      }
-    },
+
     async fetchSubjects() {
       try {
         const res = await axios.get('/subjects');
         this.subjects = res.data;
       } catch (err) {
         this.message = 'Failed to load subjects.';
+      }
+    },
+    async fetchGroups() {
+      try {
+        const res = await axios.get('/groups');
+        this.groups = res.data;
+      } catch (err) {
+        this.message = 'Failed to load groups.';
       }
     },
     async fetchTopics() {
@@ -285,19 +283,7 @@ export default {
         this.message = 'Failed to load topics.';
       }
     },
-    async fetchStudents() {
-      try {
-        const params = this.gradeLevelId ? { grade_level_id: this.gradeLevelId } : {};
-        const res = await axios.get('/students', { params });
-        this.students = res.data;
-        // Clear selected students when grade level changes
-        this.selectedStudentIds = [];
-        this.selectAllStudents = false;
-      } catch (err) {
-        this.message = 'Failed to load students.';
-        console.error('Error loading students:', err);
-      }
-    },
+
     topicName(topicId) {
       const topic = this.topics.find(t => t.id == topicId);
       return topic ? topic.topic_name : 'Topic';
@@ -334,19 +320,15 @@ export default {
         this.loading = false;
       }
     },
-    handleSelectAllStudents() {
-      if (this.selectAllStudents) {
-        this.selectedStudentIds = [];
-      }
-    },
+
 
     async handleSubmit() {
       this.loading = true;
       this.message = '';
 
-      // Validate student selection
-      if (!this.selectAllStudents && this.selectedStudentIds.length === 0) {
-        this.message = 'Please select at least one student or choose "Select all students".';
+      // Validate group selection
+      if (!this.selectedGroupId) {
+        this.message = 'Please select a class/group.';
         this.loading = false;
         return;
       }
@@ -363,19 +345,12 @@ export default {
           end_time: this.endTime || null,
           is_timed: this.isTimed,
           time_limit: this.isTimed ? this.timeLimit : null,
-          question_ids: this.selectedQuestionIds,
-          select_all_students: this.selectAllStudents,
-          student_ids: !this.selectAllStudents ? this.selectedStudentIds : []
+          question_ids: this.selectedQuestionIds
         };
         const assessmentRes = await axios.post('/assessments', assessmentPayload, { headers: { Authorization: `Bearer ${token}` } });
         const assessmentId = assessmentRes.data.assessment?.id || assessmentRes.data.id || assessmentRes.data.assessment_id;
-        // Step 2: Assign assessment
-        const assignPayload = {
-          assessment_id: assessmentId,
-          select_all_students: this.selectAllStudents,
-          student_ids: !this.selectAllStudents ? this.selectedStudentIds : []
-        };
-        const assignRes = await axios.post('/assessments/assign', assignPayload, { headers: { Authorization: `Bearer ${token}` } });
+        // Step 2: Assign assessment to group
+        const assignRes = await axios.post(`/assessments/${assessmentId}/assign-group`, { group_id: this.selectedGroupId }, { headers: { Authorization: `Bearer ${token}` } });
         this.success = true;
         this.message = assignRes.data.message;
         // Reset form
@@ -383,7 +358,7 @@ export default {
         this.type = '';
         this.subjectId = '';
         this.selectedTopicId = '';
-        this.gradeLevelId = '';
+        this.selectedGroupId = '';
         this.startTime = '';
         this.endTime = '';
         this.isTimed = false;
@@ -391,8 +366,6 @@ export default {
         this.selectedQuestionIds = [];
         this.questionsByTopic = {};
         this.topics = [];
-        this.selectAllStudents = false;
-        this.selectedStudentIds = [];
       } catch (err) {
         this.success = false;
         this.message = err.response?.data?.message || 'Error creating or assigning assessment.';
@@ -402,23 +375,10 @@ export default {
     },
   },
   mounted() {
-    this.fetchGradeLevels();
+    this.fetchGroups();
     this.fetchSubjects();
   },
-  watch: {
-    gradeLevelId: {
-      handler(newVal) {
-        if (newVal) {
-          this.fetchStudents();
-        } else {
-          this.students = [];
-          this.selectedStudentIds = [];
-          this.selectAllStudents = false;
-        }
-      },
-      immediate: true
-    }
-  },
+
 };
 </script>
 
